@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "473396823764",
+    "project_id": "dlsud-go",
+    "storage_bucket": "dlsud-go.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:473396823764:android:70ba2278f99ebad2111d41",
+        "android_client_info": {
+          "package_name": "com.example.dlsud_go"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQjKMS2m-uQEUacpE9dq10jQRVSbk2OyI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
