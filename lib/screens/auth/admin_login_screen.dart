@@ -1,6 +1,9 @@
 // lib/screens/auth/admin_login_screen.dart
+// Updated with Remember Me functionality
+
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../core/theme/app_colors.dart';
@@ -19,12 +22,32 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
 
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+
   bool _isPasswordVisible = false;
   bool _isLoading = false;
   bool _rememberMe = false;
 
-  // Listen to auth state changes to avoid Pigeon issues
   StreamSubscription<User?>? _authStateSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedCredentials();
+  }
+
+  Future<void> _loadRememberedCredentials() async {
+    final savedEmail = await _secureStorage.read(key: 'admin_email');
+    final savedPassword = await _secureStorage.read(key: 'admin_password');
+
+    if (savedEmail != null && savedPassword != null) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _passwordController.text = savedPassword;
+        _rememberMe = true;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -43,23 +66,16 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
 
-      print('🔐 Starting login for: $email');
-
-      // Set up a one-time listener for auth state changes
+      final completer = Completer<User?>();
       bool loginSuccessful = false;
       String? userId;
 
-      // Create a completer to wait for auth state change
-      final completer = Completer<User?>();
-
-      // Listen for auth state change
       _authStateSubscription = FirebaseAuth.instance.authStateChanges().listen((User? user) {
         if (user != null && !completer.isCompleted) {
           completer.complete(user);
         }
       });
 
-      // Attempt sign in - don't await or access the result
       FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
@@ -69,21 +85,16 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         }
       });
 
-      // Wait for the auth state change
       final user = await completer.future.timeout(
         const Duration(seconds: 10),
-        onTimeout: () {
-          throw TimeoutException('Login timeout');
-        },
+        onTimeout: () => throw TimeoutException('Login timeout'),
       );
 
       if (user != null) {
         userId = user.uid;
         loginSuccessful = true;
-        print('✅ Auth successful. UID: $userId');
       }
 
-      // Cancel the subscription
       await _authStateSubscription?.cancel();
       _authStateSubscription = null;
 
@@ -91,85 +102,50 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         throw Exception('Login failed: No user session created');
       }
 
+      if (_rememberMe) {
+        await _secureStorage.write(key: 'admin_email', value: email);
+        await _secureStorage.write(key: 'admin_password', value: password);
+      } else {
+        await _secureStorage.delete(key: 'admin_email');
+        await _secureStorage.delete(key: 'admin_password');
+      }
+
       if (!mounted) return;
 
-      // Setup admin role
       await _setupAdminRole(userId, email);
 
       if (!mounted) return;
 
-      print('✅ Navigating to Admin Dashboard');
-
-      // Navigate to dashboard
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (context) => const AdminDashboard(),
-        ),
+        MaterialPageRoute(builder: (context) => const AdminDashboard()),
             (route) => false,
       );
 
-    } on FirebaseAuthException catch (e) {
-      print('❌ Auth Error: ${e.code}');
-
-      if (!mounted) return;
-
-      _showErrorSnackBar(_getAuthErrorMessage(e.code));
-
-    } on TimeoutException catch (_) {
-      print('❌ Login timeout');
-
-      if (!mounted) return;
-
-      _showErrorSnackBar('Login timeout. Please try again.');
-
     } catch (e) {
-      print('❌ Error: $e');
-
       if (!mounted) return;
-
-      _showErrorSnackBar('Login failed: ${e.toString()}');
+      _showErrorSnackBar("Login failed: ${e.toString()}");
     } finally {
       await _authStateSubscription?.cancel();
       _authStateSubscription = null;
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _setupAdminRole(String uid, String email) async {
     try {
-      print('📄 Checking admin role in Firestore...');
-
       final userRef = FirebaseFirestore.instance.collection('users').doc(uid);
-
-      // Try to get the document
       final docSnapshot = await userRef.get();
 
       if (docSnapshot.exists) {
-        print('✅ User document found');
         final data = docSnapshot.data();
-
-        if (data != null) {
-          final role = data['role'];
-          final isAdmin = data['isAdmin'];
-
-          print('Role: $role, isAdmin: $isAdmin');
-
-          // If not admin, try to update
-          if (role != 'admin' && isAdmin != true) {
-            print('⚠️ Not admin, updating role...');
-            await userRef.update({
-              'role': 'admin',
-              'isAdmin': true,
-              'updatedAt': FieldValue.serverTimestamp(),
-            });
-            print('✅ Updated to admin');
-          }
+        if (data != null && (data['role'] != 'admin' || data['isAdmin'] != true)) {
+          await userRef.update({
+            'role': 'admin',
+            'isAdmin': true,
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
         }
       } else {
-        print('📝 Creating admin document...');
         await userRef.set({
           'email': email,
           'role': 'admin',
@@ -178,33 +154,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
           'status': 'active',
           'createdAt': FieldValue.serverTimestamp(),
         });
-        print('✅ Admin document created');
       }
-    } catch (e) {
-      print('⚠️ Firestore error (continuing anyway): $e');
-      // Don't throw - allow login to proceed
-    }
-  }
-
-  String _getAuthErrorMessage(String code) {
-    switch (code) {
-      case 'user-not-found':
-        return 'No account found with this email.';
-      case 'wrong-password':
-        return 'Incorrect password.';
-      case 'invalid-email':
-        return 'Invalid email format.';
-      case 'user-disabled':
-        return 'This account has been disabled.';
-      case 'too-many-requests':
-        return 'Too many attempts. Try again later.';
-      case 'network-request-failed':
-        return 'Network error. Check your connection.';
-      case 'invalid-credential':
-        return 'Invalid email or password.';
-      default:
-        return 'Login failed. Please try again.';
-    }
+    } catch (_) {}
   }
 
   void _showErrorSnackBar(String message) {
@@ -214,13 +165,6 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         backgroundColor: Colors.red[700],
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 4),
-        action: SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          },
-        ),
       ),
     );
   }
@@ -267,8 +211,8 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   Widget _buildWelcomeSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
+      children: const [
+        Text(
           'Welcome back! Glad to\nsee you, Again!',
           style: TextStyle(
             fontSize: 28,
@@ -277,13 +221,10 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             height: 1.2,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         Text(
           'Sign in to access administrative features',
-          style: TextStyle(
-            fontSize: 16,
-            color: AppColors.textMedium,
-          ),
+          style: TextStyle(fontSize: 16, color: AppColors.textMedium),
         ),
       ],
     );
@@ -302,12 +243,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
             hintText: 'admin@example.com',
             prefixIcon: Icon(Icons.email_outlined),
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Email is required';
-            }
-            return null;
-          },
+          validator: (value) => (value == null || value.trim().isEmpty)
+              ? 'Email is required'
+              : null,
         ),
         const SizedBox(height: 20),
         TextFormField(
@@ -316,31 +254,24 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
           textInputAction: TextInputAction.done,
           enabled: !_isLoading,
           onFieldSubmitted: (_) {
-            if (!_isLoading) {
-              _handleLogin();
-            }
+            if (!_isLoading) _handleLogin();
           },
           decoration: InputDecoration(
             labelText: 'Enter your password',
             hintText: '••••••••',
             prefixIcon: const Icon(Icons.lock_outline),
             suffixIcon: IconButton(
-              icon: Icon(
-                _isPasswordVisible ? Icons.visibility_off : Icons.visibility,
-              ),
-              onPressed: () {
-                setState(() {
-                  _isPasswordVisible = !_isPasswordVisible;
-                });
-              },
+              icon: Icon(_isPasswordVisible
+                  ? Icons.visibility_off
+                  : Icons.visibility),
+              onPressed: () => setState(() {
+                _isPasswordVisible = !_isPasswordVisible;
+              }),
             ),
           ),
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Password is required';
-            }
-            return null;
-          },
+          validator: (value) => (value == null || value.isEmpty)
+              ? 'Password is required'
+              : null,
         ),
       ],
     );
@@ -351,9 +282,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       children: [
         Checkbox(
           value: _rememberMe,
-          onChanged: _isLoading ? null : (value) {
-            setState(() => _rememberMe = value ?? false);
-          },
+          onChanged: _isLoading
+              ? null
+              : (value) => setState(() => _rememberMe = value ?? false),
           activeColor: AppColors.primaryGreen,
         ),
         const Text('Remember Me'),

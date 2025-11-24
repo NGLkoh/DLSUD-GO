@@ -1,0 +1,18 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "dashboard_sections",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "is_active",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "order",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ]
+}

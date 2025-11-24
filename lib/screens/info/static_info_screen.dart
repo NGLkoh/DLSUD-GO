@@ -5,7 +5,7 @@ import '../chatbot/chatbot_screen.dart';
 
 class StaticInfoScreen extends StatefulWidget {
   final String title;
-  final List<String> sections;
+  final List<dynamic> sections;
 
   const StaticInfoScreen({
     super.key,
@@ -17,7 +17,7 @@ class StaticInfoScreen extends StatefulWidget {
   State<StaticInfoScreen> createState() => _StaticInfoScreenState();
 }
 
-class _StaticInfoScreenState extends State<StaticInfoScreen> 
+class _StaticInfoScreenState extends State<StaticInfoScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
@@ -108,7 +108,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
               ),
             ),
           ),
-          
+
           // Tab bar
           SliverPersistentHeader(
             pinned: true,
@@ -119,18 +119,29 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
                 indicatorColor: AppColors.primaryGreen,
                 labelColor: AppColors.primaryGreen,
                 unselectedLabelColor: AppColors.textMedium,
-                tabs: widget.sections.map((section) => Tab(text: section)).toList(),
+                tabs: widget.sections.map((section) {
+                  final title = section is String
+                      ? section
+                      : (section as Map<String, dynamic>)['title'] as String? ??
+                          '';
+                  return Tab(text: title);
+                }).toList(),
               ),
             ),
           ),
-          
+
           // Tab content
           SliverFillRemaining(
             child: TabBarView(
               controller: _tabController,
-              children: widget.sections.map((section) => 
-                _buildSectionContent(section)
-              ).toList(),
+              children: widget.sections.map((section) {
+                if (section is String) {
+                  return _buildStaticSectionContent(section);
+                } else {
+                  return _buildDynamicSectionContent(
+                      section as Map<String, dynamic>);
+                }
+              }).toList(),
             ),
           ),
         ],
@@ -155,16 +166,44 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
     );
   }
 
-  Widget _buildSectionContent(String section) {
+  Widget _buildDynamicSectionContent(Map<String, dynamic> section) {
+    final title = section['title'] as String? ?? '';
+    final descriptions = List<String>.from(
+      section['details'] ??
+          section['descriptions'] ??
+          [],
+    );
+
+    if (descriptions.isEmpty) {
+      return Center(
+          child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Text('No content available for this section.'),
+      ));
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _getSectionContent(section),
-          
+          _buildInfoCard(title, '', Icons.description, descriptions),
           const SizedBox(height: 40),
-          
+          _buildHelpSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStaticSectionContent(String section) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _getStaticSectionContent(section),
+          const SizedBox(height: 40),
+
           // Help section
           _buildHelpSection(),
         ],
@@ -172,7 +211,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
     );
   }
 
-  Widget _getSectionContent(String section) {
+  Widget _getStaticSectionContent(String section) {
     switch (section) {
       case 'Student Services & Administration':
         return _buildStudentServicesContent();
@@ -220,9 +259,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Career guidance and placement services',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Office Hours',
           'Monday to Friday: 8:00 AM - 4:00 PM',
@@ -251,9 +288,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Undergraduate programs and experienced Lasallian education available',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Requirements',
           'Documents needed for admission',
@@ -266,9 +301,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Passport-size photos (2x2)',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Application Process',
           'Simple steps to join DLSU-D',
@@ -300,9 +333,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Official receipts provided for all transactions',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Payment Schedule',
           'Flexible payment options',
@@ -332,9 +363,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Third Floor: Academic Affairs, Dean\'s Offices',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Student Services Centers',
           'Multiple locations across campus',
@@ -364,9 +393,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Summer Classes: June - July 2026',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Key Dates',
           'Mark your calendar',
@@ -398,9 +425,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Health insurance partnerships',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Security Services',
           'Safe and secure campus environment',
@@ -432,9 +457,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Government institutions tours',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'International Study Tours',
           'Global learning experiences',
@@ -465,9 +488,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Educational assistance for out-of-school youth',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Cultural Activities',
           'Celebrating arts and culture',
@@ -498,9 +519,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Research collaboration projects',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Partner Universities',
           'Global Lasallian network',
@@ -528,9 +547,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             color: AppColors.textDark,
           ),
         ),
-        
         const SizedBox(height: 24),
-        
         _buildInfoCard(
           'Admission Requirements',
           'Based on applicant\'s qualifications',
@@ -561,9 +578,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Service and volunteer organizations',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Campus Facilities',
           'Modern facilities for learning and recreation',
@@ -595,9 +610,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Science and Mathematics',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Graduate Programs',
           'Advanced degrees for career advancement',
@@ -628,9 +641,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             'Global research collaborations',
           ],
         ),
-        
         const SizedBox(height: 16),
-        
         _buildInfoCard(
           'Lasallian Network',
           'Part of a global educational community',
@@ -658,9 +669,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             color: AppColors.primaryGreen,
           ),
         ),
-        
         const SizedBox(height: 16),
-        
         const Text(
           'Welcome to this section of DLSU-D information. Here you\'ll find comprehensive details about our programs, services, and opportunities.',
           style: TextStyle(
@@ -669,9 +678,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
             color: AppColors.textMedium,
           ),
         ),
-        
         const SizedBox(height: 24),
-        
         _buildInfoCard(
           'More Information',
           'Contact us for detailed information',
@@ -714,9 +721,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
                     size: 24,
                   ),
                 ),
-                
                 const SizedBox(width: 16),
-                
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -730,48 +735,48 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textMedium,
+                      if (subtitle.isNotEmpty)
+                        Text(
+                          subtitle,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textMedium,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),
               ],
             ),
-            
             const SizedBox(height: 16),
-            
             ...items.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.only(top: 6, right: 12),
-                    decoration: const BoxDecoration(
-                      color: AppColors.primaryGreen,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  Expanded(
-                    child: Text(
-                      item,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: AppColors.textDark,
-                        height: 1.4,
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 6,
+                        height: 6,
+                        margin: const EdgeInsets.only(top: 6, right: 12),
+                        decoration: const BoxDecoration(
+                          color: AppColors.primaryGreen,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                    ),
+                      Expanded(
+                        child: Text(
+                          item,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textDark,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            )).toList(),
+                ))
+                .toList(),
           ],
         ),
       ),
@@ -802,9 +807,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
                 ),
               ],
             ),
-            
             const SizedBox(height: 12),
-            
             Text(
               'Can\'t find what you\'re looking for? Our AI assistant is here to help answer your questions about DLSU-D.',
               style: TextStyle(
@@ -813,9 +816,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
                 height: 1.4,
               ),
             ),
-            
             const SizedBox(height: 16),
-            
             ElevatedButton.icon(
               onPressed: () {
                 Navigator.push(

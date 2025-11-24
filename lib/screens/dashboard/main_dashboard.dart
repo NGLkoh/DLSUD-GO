@@ -1,6 +1,8 @@
 // lib/screens/dashboard/main_dashboard.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dlsud_go/core/theme/app_colors.dart';
 import 'package:flutter/material.dart';
+import '../../models/dashboard_section.dart';
 import '../../widgets/common/custom_button.dart';
 import '../chatbot/chatbot_screen.dart';
 import '../map/navigation/map_navigation_screen.dart';
@@ -18,7 +20,6 @@ class _MainDashboardState extends State<MainDashboard> {
   int _currentIndex = 0;
   final PageController _pageController = PageController();
 
-  // Bottom navigation pages
   final List<Widget> _pages = [
     const DashboardHomeTab(),
     const MapNavigationScreen(),
@@ -47,7 +48,7 @@ class _MainDashboardState extends State<MainDashboard> {
     return Scaffold(
       body: PageView(
         controller: _pageController,
-        physics: const NeverScrollableScrollPhysics(), // Disable swipe
+        physics: const NeverScrollableScrollPhysics(),
         onPageChanged: (index) {
           setState(() {
             _currentIndex = index;
@@ -97,9 +98,53 @@ class _MainDashboardState extends State<MainDashboard> {
   }
 }
 
-// Home tab content for the dashboard
 class DashboardHomeTab extends StatelessWidget {
   const DashboardHomeTab({super.key});
+
+  Stream<List<DashboardSection>> _getSectionsStream() {
+    return FirebaseFirestore.instance
+        .collection('dashboard_sections')
+        .where('is_active', isEqualTo: true)
+        .orderBy('order')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => DashboardSection.fromFirestore(doc))
+        .toList());
+  }
+
+  Stream<Map<String, dynamic>> _getCampusInfoStream() {
+    return FirebaseFirestore.instance
+        .collection('campus_info')
+        .doc('main')
+        .snapshots()
+        .map((doc) => doc.exists ? doc.data() as Map<String, dynamic> : {});
+  }
+
+  IconData _getIconFromString(String iconName) {
+    const iconMap = {
+      'school': Icons.school,
+      'map': Icons.map,
+      'groups': Icons.groups,
+      'info': Icons.info,
+      'book': Icons.book,
+      'event': Icons.event,
+      'sports': Icons.sports,
+      'restaurant': Icons.restaurant,
+      'local_library': Icons.local_library,
+      'science': Icons.science,
+      'computer': Icons.computer,
+      'language': Icons.language,
+    };
+    return iconMap[iconName] ?? Icons.info;
+  }
+
+  Color _getColorFromHex(String hexColor) {
+    try {
+      return Color(int.parse(hexColor.replaceAll('#', '0xFF')));
+    } catch (e) {
+      return AppColors.primaryGreen;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +152,6 @@ class DashboardHomeTab extends StatelessWidget {
       backgroundColor: AppColors.backgroundColor,
       body: CustomScrollView(
         slivers: [
-          // App bar with welcome message and settings
           SliverAppBar(
             expandedHeight: 120,
             floating: false,
@@ -158,7 +202,6 @@ class DashboardHomeTab extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.search, color: Colors.white),
                 onPressed: () {
-                  // Navigate to search functionality
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -169,24 +212,42 @@ class DashboardHomeTab extends StatelessWidget {
               ),
             ],
           ),
-          
-          // Main content
           SliverPadding(
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                // Main service cards
-                _buildMainServiceCards(context),
-                
+                StreamBuilder<List<DashboardSection>>(
+                  stream: _getSectionsStream(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(child: Text('Error: ${snapshot.error}'));
+                    }
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      return const Center(child: Text('No sections available'));
+                    }
+
+                    final sections = snapshot.data!;
+                    return _buildMainServiceCards(context, sections);
+                  },
+                ),
                 const SizedBox(height: 32),
-                
-                // Quick access section
                 _buildQuickAccessSection(context),
-                
                 const SizedBox(height: 32),
-                
-                // Campus info section
-                _buildCampusInfoSection(context),
+                StreamBuilder<Map<String, dynamic>>(
+                  stream: _getCampusInfoStream(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                      return const SizedBox();
+                    }
+                    return _buildCampusInfoSection(context, snapshot.data!);
+                  },
+                ),
               ]),
             ),
           ),
@@ -195,87 +256,57 @@ class DashboardHomeTab extends StatelessWidget {
     );
   }
 
-  Widget _buildMainServiceCards(BuildContext context) {
+  Widget _buildMainServiceCards(BuildContext context, List<DashboardSection> sections) {
     return Column(
-      children: [
-        _buildServiceCard(
-          context,
-          'Academic Services',
-          'Access student services, admissions, and more',
-          Icons.school,
-          AppColors.primaryGreen,
-          () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const StaticInfoScreen(
-                  title: 'Academic Services',
-                  sections: [
-                    'Student Services & Administration',
-                    'Admissions',
-                    'Payment',
-                    'Office Location',
-                    'Academic Calendar',
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-        
-        const SizedBox(height: 16),
-        
-        _buildServiceCard(
-          context,
-          'Maps',
-          'Navigate around campus with interactive maps',
-          Icons.map,
-          AppColors.accentBlue,
-          () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const MapNavigationScreen()),
-            );
-          },
-        ),
-        
-        const SizedBox(height: 16),
-        
-        _buildServiceCard(
-          context,
-          'Opportunities & Engagement',
-          'Explore student life, activities, and programs',
-          Icons.groups,
-          AppColors.warningOrange,
-          () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const StaticInfoScreen(
-                  title: 'Student Life & Support',
-                  sections: [
-                    'Health & Security',
-                    'Educational Tours',
-                    'Off-campus Activities',
-                    'Exchange Student Programs',
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ],
+      children: sections.map((section) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: _buildServiceCard(
+            context,
+            section.title,
+            section.description,
+            _getIconFromString(section.iconName),
+            _getColorFromHex(section.colorHex),
+                () {
+              if (section.route == 'map_navigation') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MapNavigationScreen()),
+                );
+              } else if (section.route == 'static_info') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => StaticInfoScreen(
+                      title: section.title,
+                      sections: section.subsections.map((s) {
+                        return {
+                          'title': s['title'] ?? '',
+                          'details': List<String>.from(
+                            s['descriptions'] ?? s['details'] ?? [],
+                          ),
+                        };
+                      }).toList(),
+                    ),
+                  ),
+
+                  );
+              }
+            },
+          ),
+        );
+      }).toList(),
     );
   }
 
   Widget _buildServiceCard(
-    BuildContext context,
-    String title,
-    String subtitle,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
+      BuildContext context,
+      String title,
+      String subtitle,
+      IconData icon,
+      Color color,
+      VoidCallback onTap,
+      ) {
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -357,9 +388,7 @@ class DashboardHomeTab extends StatelessWidget {
             color: AppColors.textDark,
           ),
         ),
-        
         const SizedBox(height: 16),
-        
         Row(
           children: [
             Expanded(
@@ -367,7 +396,7 @@ class DashboardHomeTab extends StatelessWidget {
                 'Chat Assistant',
                 Icons.chat,
                 AppColors.primaryGreen,
-                () {
+                    () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const ChatbotScreen()),
@@ -381,7 +410,7 @@ class DashboardHomeTab extends StatelessWidget {
                 'Settings',
                 Icons.settings,
                 AppColors.textMedium,
-                () {
+                    () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const SettingsScreen()),
@@ -396,11 +425,11 @@ class DashboardHomeTab extends StatelessWidget {
   }
 
   Widget _buildQuickAccessCard(
-    String title,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
+      String title,
+      IconData icon,
+      Color color,
+      VoidCallback onTap,
+      ) {
     return Card(
       child: InkWell(
         onTap: onTap,
@@ -413,7 +442,7 @@ class DashboardHomeTab extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 title,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                   color: AppColors.textDark,
@@ -427,7 +456,17 @@ class DashboardHomeTab extends StatelessWidget {
     );
   }
 
-  Widget _buildCampusInfoSection(BuildContext context) {
+  Widget _buildCampusInfoSection(BuildContext context, Map<String, dynamic> data) {
+    final title = data['title'] ?? 'De La Salle University-Dasmariñas';
+    final subtitle = data['subtitle'] ?? 'Your gateway to campus navigation and services';
+    final description = data['description'] ?? '';
+    final buttonText = data['button_text'] ?? 'Learn More';
+
+    // FIXED: button_sections is now List<Map>
+    final buttonSections = List<Map<String, dynamic>>.from(
+        data['button_sections'] ?? []
+    );
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -443,75 +482,68 @@ class DashboardHomeTab extends StatelessWidget {
                     color: AppColors.primaryGreen,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
-                    Icons.school,
-                    color: Colors.white,
-                    size: 30,
-                  ),
+                  child: const Icon(Icons.school, color: Colors.white, size: 30),
                 ),
                 const SizedBox(width: 16),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'De La Salle University-Dasmariñas',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryGreen,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        'Your gateway to campus navigation and services',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: AppColors.textMedium,
-                        ),
-                      ),
+                      Text(title,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryGreen,
+                          )),
+                      const SizedBox(height: 4),
+                      Text(subtitle,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.textMedium,
+                          )),
                     ],
                   ),
                 ),
               ],
             ),
-            
-            const SizedBox(height: 20),
-            
-            const Text(
-              'Welcome to De La Salle University-Dasmariñas, a proud member of the Lasallian network of institutions in 79 countries. Our curriculum is thoughtfully designed to develop the competencies needed for our chosen field and to prepare you to be a leader in your community.',
-              style: TextStyle(
-                fontSize: 14,
-                height: 1.5,
-                color: AppColors.textMedium,
+
+            if (description.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Text(
+                description,
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: AppColors.textMedium,
+                ),
               ),
-            ),
-            
-            const SizedBox(height: 16),
-            
-            CustomButton(
-              text: 'Learn More',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const StaticInfoScreen(
-                      title: 'About DLSU-D',
-                      sections: [
-                        'General Admissions Policy',
-                        'Campus Life',
-                        'Academic Programs',
-                        'Global Engagement',
-                      ],
+            ],
+
+            if (buttonSections.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              CustomButton(
+                text: buttonText,
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => StaticInfoScreen(
+                        title: title,
+                        sections: buttonSections.map((section) {
+                          return {
+                            'title': section['title'] ?? '',
+                            'details': List<String>.from(section['details'] ?? []),
+                          };
+                        }).toList(),
+                      ),
                     ),
-                  ),
-                );
-              },
-              isOutlined: true,
-            ),
+                  );
+                },
+                isOutlined: true,
+              ),
+            ],
           ],
         ),
       ),
     );
-  }
-}
+  }}

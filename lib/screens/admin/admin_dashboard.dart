@@ -1,8 +1,13 @@
 // lib/screens/admin/admin_dashboard.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dlsud_go/screens/dashboard/main_dashboard.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../core/theme/app_colors.dart';
+import '../../models/dashboard_section.dart';
 import '../../widgets/common/custom_button.dart';
+import 'section_editor_screen.dart';
+import 'campus_info_editor_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -17,7 +22,7 @@ class UserFeedback {
   final int rating;
   final String additionalFeedback;
   final List<String> positives;
-  final String improvements;
+  final String platform;
   final String appVersion;
   final DateTime submittedAt;
 
@@ -27,87 +32,56 @@ class UserFeedback {
     required this.rating,
     required this.additionalFeedback,
     required this.positives,
-    required this.improvements,
+    required this.platform,
     required this.appVersion,
     required this.submittedAt,
   });
 
   factory UserFeedback.fromFirestore(DocumentSnapshot doc) {
     Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+
+    String platform = '';
+    if (data['improvements'] != null) {
+      if (data['improvements'] is Map<String, dynamic>) {
+        platform = (data['improvements'] as Map<String, dynamic>)['platform'] ?? '';
+      } else if (data['improvements'] is String) {
+        platform = data['improvements'] as String;
+      }
+    }
+
     return UserFeedback(
       id: doc.id,
       email: data['email'] ?? '',
       rating: data['rating'] ?? 0,
-      additionalFeedback: data['additionalFeedback'] ?? '',
+      additionalFeedback: data['additional_feedback'] ?? '',
       positives: List<String>.from(data['positives'] ?? []),
-      improvements: data['improvements'] ?? '',
-      appVersion: data['appVersion'] ?? '',
-      submittedAt: (data['submittedAt'] as Timestamp).toDate(),
+      platform: platform,
+      appVersion: data['app_version'] ?? '',
+      submittedAt: (data['submitted_at'] as Timestamp).toDate(),
     );
   }
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
-  int _selectedIndex = 0; // 0: Dashboard, 1-8: Pages, 9: Feedbacks
-
-  final List<AdminPage> _pages = [
-    AdminPage(
-      title: 'Admissions',
-      description: 'Your first step to becoming a Lasallian',
-      icon: Icons.school,
-      color: AppColors.primaryGreen,
-    ),
-    AdminPage(
-      title: 'Applications',
-      description: 'Learn how to apply to DLSU-D',
-      icon: Icons.description,
-      color: AppColors.accentBlue,
-    ),
-    AdminPage(
-      title: 'Scholarships',
-      description: 'Explore merit-based and need-based scholarships',
-      icon: Icons.star,
-      color: AppColors.warningOrange,
-    ),
-    AdminPage(
-      title: 'Enrollment',
-      description: 'The step-by-step process of enrollment',
-      icon: Icons.how_to_reg,
-      color: AppColors.primaryGreen,
-    ),
-    AdminPage(
-      title: 'Academic Programs',
-      description: 'Get to know the diverse academic programs',
-      icon: Icons.auto_stories,
-      color: AppColors.accentBlue,
-    ),
-    AdminPage(
-      title: 'Research & Innovation',
-      description: 'DLSU-D fosters a strong research culture',
-      icon: Icons.science,
-      color: AppColors.warningOrange,
-    ),
-    AdminPage(
-      title: 'Campus Life',
-      description: 'From student organizations to sports',
-      icon: Icons.groups,
-      color: AppColors.primaryGreen,
-    ),
-    AdminPage(
-      title: 'Global Engagement',
-      description: 'Learn about international programs',
-      icon: Icons.public,
-      color: AppColors.accentBlue,
-    ),
-  ];
+  int _selectedIndex = 0; // 0: Dashboard, 1: Sections, 2: Campus Info, 3: Feedbacks
 
   Stream<List<UserFeedback>> _getFeedbackStream() {
     return FirebaseFirestore.instance
         .collection('feedback')
-        .orderBy('submittedAt', descending: true)
+        .orderBy('submitted_at', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
         .map((doc) => UserFeedback.fromFirestore(doc))
+        .toList());
+  }
+
+  Stream<List<DashboardSection>> _getSectionsStream() {
+    return FirebaseFirestore.instance
+        .collection('dashboard_sections')
+        .orderBy('order')
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => DashboardSection.fromFirestore(doc))
         .toList());
   }
 
@@ -115,27 +89,43 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_getAppBarTitle()),
+        title: Text(_getAppBarTitle(), style: const TextStyle(color: Colors.white)),
+        backgroundColor: AppColors.primaryGreen,
+        iconTheme: const IconThemeData(
+          color: Colors.white,
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () {
-              // TODO: Implement logout
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (context) => const MainDashboard()),
+                    (Route<dynamic> route) => false,
+              );
             },
           ),
         ],
       ),
       drawer: _buildDrawer(),
       body: _buildBody(),
+      floatingActionButton: _selectedIndex == 1 ? _buildAddSectionFAB() : null,
     );
   }
 
   String _getAppBarTitle() {
-    if (_selectedIndex == 0) return 'Admin Dashboard';
-    if (_selectedIndex >= 1 && _selectedIndex <= 8) {
-      return _pages[_selectedIndex - 1].title;
+    switch (_selectedIndex) {
+      case 0:
+        return 'Admin Dashboard';
+      case 1:
+        return 'Dashboard Sections';
+      case 2:
+        return 'Campus Info';
+      case 3:
+        return 'User Feedbacks';
+      default:
+        return 'Admin Dashboard';
     }
-    return 'User Feedbacks';
   }
 
   Widget _buildDrawer() {
@@ -144,7 +134,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.primaryGreen,
             ),
             child: const Column(
@@ -181,7 +171,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
-              'PAGES',
+              'CONTENT MANAGEMENT',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
@@ -189,26 +179,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
           ),
-          ..._pages.asMap().entries.map((entry) {
-            int idx = entry.key;
-            AdminPage page = entry.value;
-            return ListTile(
-              leading: Icon(page.icon, color: page.color),
-              title: Text(page.title),
-              selected: _selectedIndex == idx + 1,
-              onTap: () {
-                setState(() => _selectedIndex = idx + 1);
-                Navigator.pop(context);
-              },
-            );
-          }).toList(),
+          ListTile(
+            leading: const Icon(Icons.view_module, color: AppColors.accentBlue),
+            title: const Text('Dashboard Sections'),
+            selected: _selectedIndex == 1,
+            onTap: () {
+              setState(() => _selectedIndex = 1);
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.info, color: AppColors.warningOrange),
+            title: const Text('Campus Info'),
+            selected: _selectedIndex == 2,
+            onTap: () {
+              setState(() => _selectedIndex = 2);
+              Navigator.pop(context);
+            },
+          ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.feedback),
-            title: const Text('Feedbacks'),
-            selected: _selectedIndex == 9,
+            title: const Text('User Feedbacks'),
+            selected: _selectedIndex == 3,
             onTap: () {
-              setState(() => _selectedIndex = 9);
+              setState(() => _selectedIndex = 3);
               Navigator.pop(context);
             },
           ),
@@ -218,203 +213,412 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildBody() {
-    if (_selectedIndex == 0) {
-      return _buildDashboardView();
-    } else if (_selectedIndex >= 1 && _selectedIndex <= 8) {
-      return _buildPageEditorView(_pages[_selectedIndex - 1]);
-    } else {
-      return _buildFeedbacksView();
+    switch (_selectedIndex) {
+      case 0:
+        return _buildDashboardView();
+      case 1:
+        return _buildSectionsView();
+      case 2:
+        return _buildCampusInfoView();
+      case 3:
+        return _buildFeedbacksView();
+      default:
+        return _buildDashboardView();
     }
   }
 
   Widget _buildDashboardView() {
     return StreamBuilder<List<UserFeedback>>(
       stream: _getFeedbackStream(),
-      builder: (context, snapshot) {
-        int feedbackCount = 0;
-        if (snapshot.hasData) {
-          feedbackCount = snapshot.data!.length;
-        }
+      builder: (context, feedbackSnapshot) {
+        return StreamBuilder<List<DashboardSection>>(
+          stream: _getSectionsStream(),
+          builder: (context, sectionsSnapshot) {
+            int feedbackCount = feedbackSnapshot.data?.length ?? 0;
+            int sectionsCount = sectionsSnapshot.data?.length ?? 0;
+            int activeSections = sectionsSnapshot.data?.where((s) => s.isActive).length ?? 0;
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Overview',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Card(
-                      elevation: 4,
-                      child: Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.pages,
-                              size: 48,
-                              color: AppColors.primaryGreen,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              '${_pages.length}',
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'Total Pages',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                  const Text(
+                    'Overview',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Card(
-                      elevation: 4,
-                      child: Padding(
-                        padding: const EdgeInsets.all(20.0),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.feedback,
-                              size: 48,
-                              color: AppColors.accentBlue,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              '$feedbackCount',
-                              style: const TextStyle(
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              'User Feedbacks',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
+                  const SizedBox(height: 16),
+                  GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 1.3,
+                    children: [
+                      _buildStatCard(
+                        'Dashboard Sections',
+                        '$sectionsCount',
+                        Icons.view_module,
+                        AppColors.primaryGreen,
+                        'Active: $activeSections',
                       ),
+                      _buildStatCard(
+                        'User Feedbacks',
+                        '$feedbackCount',
+                        Icons.feedback,
+                        AppColors.accentBlue,
+                        'Total received',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Quick Actions',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildQuickActionCard(
+                    'Manage Dashboard Sections',
+                    'Add, edit, or reorder sections',
+                    Icons.view_module,
+                    AppColors.primaryGreen,
+                        () => setState(() => _selectedIndex = 1),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildQuickActionCard(
+                    'Edit Campus Info',
+                    'Update campus information card',
+                    Icons.info,
+                    AppColors.warningOrange,
+                        () => setState(() => _selectedIndex = 2),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildQuickActionCard(
+                    'View Feedbacks',
+                    'Check user feedback and ratings',
+                    Icons.feedback,
+                    AppColors.accentBlue,
+                        () => setState(() => _selectedIndex = 3),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
-              const Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 16.0,
-                  mainAxisSpacing: 16.0,
-                  childAspectRatio: 1.2,
-                ),
-                itemCount: _pages.length,
-                itemBuilder: (context, index) {
-                  final page = _pages[index];
-                  return Card(
-                    elevation: 2.0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12.0),
-                    ),
-                    child: InkWell(
-                      onTap: () {
-                        setState(() => _selectedIndex = index + 1);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(page.icon, size: 36.0, color: page.color),
-                            const SizedBox(height: 8.0),
-                            Text(
-                              page.title,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14.0,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildPageEditorView(AdminPage page) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(page.icon, size: 80, color: page.color),
-          const SizedBox(height: 16),
-          Text(
-            page.title,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
-            child: Text(
-              page.description,
-              textAlign: TextAlign.center,
+  Widget _buildStatCard(String title, String value, IconData icon, Color color, String subtitle) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 36, color: color),
+            const SizedBox(height: 12),
+            Text(
+              value,
               style: const TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(height: 4),
+            Flexible(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Flexible(
+              child: Text(
+                subtitle,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionCard(String title, String subtitle, IconData icon, Color color, VoidCallback onTap) {
+    return Card(
+      elevation: 2,
+      child: ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
           ),
-          const SizedBox(height: 24),
-          CustomButton(
-            text: 'Edit Content',
+          child: Icon(icon, color: color),
+        ),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(subtitle),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: onTap,
+      ),
+    );
+  }
+
+  Widget _buildSectionsView() {
+    return StreamBuilder<List<DashboardSection>>(
+      stream: _getSectionsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.view_module, size: 64, color: Colors.grey),
+                SizedBox(height: 16),
+                Text('No sections yet. Add one to get started!'),
+              ],
+            ),
+          );
+        }
+
+        final sections = snapshot.data!;
+        return ReorderableListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: sections.length,
+          onReorder: (oldIndex, newIndex) {
+            _reorderSections(sections, oldIndex, newIndex);
+          },
+          itemBuilder: (context, index) {
+            final section = sections[index];
+            return _buildSectionCard(section, key: ValueKey(section.id));
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSectionCard(DashboardSection section, {required Key key}) {
+    return Card(
+      key: key,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListTile(
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.drag_handle, color: Colors.grey),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _getColorFromHex(section.colorHex).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                _getIconFromString(section.iconName),
+                color: _getColorFromHex(section.colorHex),
+              ),
+            ),
+          ],
+        ),
+        title: Text(
+          section.title,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(section.description),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Chip(
+                  label: Text(
+                    section.isActive ? 'Active' : 'Inactive',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  backgroundColor: section.isActive
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.grey.withOpacity(0.1),
+                  padding: EdgeInsets.zero,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                const SizedBox(width: 8),
+                if (section.subsections.isNotEmpty)
+                  Chip(
+                    label: Text(
+                      '${section.subsections.length} subsections',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    backgroundColor: Colors.blue.withOpacity(0.1),
+                    padding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+              ],
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: AppColors.accentBlue),
+              onPressed: () => _navigateToEditor(section),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () => _confirmDelete(section),
+            ),
+          ],
+        ),
+        isThreeLine: true,
+      ),
+    );
+  }
+
+  void _reorderSections(List<DashboardSection> sections, int oldIndex, int newIndex) async {
+    if (newIndex > oldIndex) newIndex--;
+
+    final batch = FirebaseFirestore.instance.batch();
+
+    // Update order for all sections
+    for (int i = 0; i < sections.length; i++) {
+      int newOrder;
+      if (i == oldIndex) {
+        newOrder = newIndex;
+      } else if (oldIndex < newIndex) {
+        if (i > oldIndex && i <= newIndex) {
+          newOrder = i - 1;
+        } else {
+          newOrder = i;
+        }
+      } else {
+        if (i >= newIndex && i < oldIndex) {
+          newOrder = i + 1;
+        } else {
+          newOrder = i;
+        }
+      }
+
+      final docRef = FirebaseFirestore.instance
+          .collection('dashboard_sections')
+          .doc(sections[i].id);
+      batch.update(docRef, {'order': newOrder});
+    }
+
+    await batch.commit();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sections reordered')),
+    );
+  }
+
+  void _confirmDelete(DashboardSection section) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Section'),
+        content: Text('Are you sure you want to delete "${section.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
             onPressed: () {
-              // TODO: Navigate to page editor
+              Navigator.pop(context);
+              _deleteSection(section.id);
             },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
+  }
+
+  void _deleteSection(String sectionId) async {
+    try {
+      await FirebaseFirestore.instance
+          .collection('dashboard_sections')
+          .doc(sectionId)
+          .delete();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Section deleted')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  void _navigateToEditor(DashboardSection? section) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SectionEditorScreen(section: section),
+      ),
+    );
+  }
+
+  Widget _buildAddSectionFAB() {
+    return FloatingActionButton.extended(
+      onPressed: () => _navigateToEditor(null),
+      icon: const Icon(Icons.add),
+      label: const Text('Add Section'),
+      backgroundColor: AppColors.primaryGreen,
+    );
+  }
+
+  Widget _buildCampusInfoView() {
+    return CampusInfoEditorScreen();
+  }
+
+  IconData _getIconFromString(String iconName) {
+    const iconMap = {
+      'school': Icons.school,
+      'map': Icons.map,
+      'groups': Icons.groups,
+      'info': Icons.info,
+      'book': Icons.book,
+      'event': Icons.event,
+    };
+    return iconMap[iconName] ?? Icons.info;
+  }
+
+  Color _getColorFromHex(String hexColor) {
+    try {
+      return Color(int.parse(hexColor.replaceAll('#', '0xFF')));
+    } catch (e) {
+      return AppColors.primaryGreen;
+    }
   }
 
   Widget _buildFeedbacksView() {
@@ -439,10 +643,87 @@ class _AdminDashboardState extends State<AdminDashboard> {
             final feedback = feedbacks[index];
             return Card(
               margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: ListTile(
-                title: Text('Rating: ${feedback.rating} stars'),
-                subtitle: Text(feedback.additionalFeedback),
-                trailing: Text(feedback.email),
+              elevation: 4,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: List.generate(5, (starIndex) {
+                            return Icon(
+                              starIndex < feedback.rating ? Icons.star : Icons.star_border,
+                              color: Colors.amber,
+                              size: 20,
+                            );
+                          }),
+                        ),
+                        Text(
+                          DateFormat.yMMMd().add_jm().format(feedback.submittedAt),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      feedback.additionalFeedback,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (feedback.positives.isNotEmpty) ...[
+                      const Text(
+                        'What went well:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 8.0,
+                        runSpacing: 4.0,
+                        children: feedback.positives.map((positive) {
+                          return Chip(
+                            label: Text(positive),
+                            backgroundColor: AppColors.primaryGreen.withOpacity(0.1),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          feedback.email,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                          ),
+                        ),
+                        Text(
+                          'v${feedback.appVersion} (${feedback.platform.split('.').last})',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[700],
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -450,18 +731,4 @@ class _AdminDashboardState extends State<AdminDashboard> {
       },
     );
   }
-}
-
-class AdminPage {
-  final String title;
-  final String description;
-  final IconData icon;
-  final Color color;
-
-  AdminPage({
-    required this.title,
-    required this.description,
-    required this.icon,
-    required this.color,
-  });
 }
