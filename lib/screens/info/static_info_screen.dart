@@ -122,9 +122,13 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
                 tabs: widget.sections.map((section) {
                   final title = section is String
                       ? section
-                      : (section as Map<String, dynamic>)['title'] as String? ??
-                          '';
-                  return Tab(text: title);
+                      : (section as Map<String, dynamic>)['title'] as String? ?? '';
+
+                  return Tab(
+                    child: Center(
+                      child: Text(title, textAlign: TextAlign.center),
+                    ),
+                  );
                 }).toList(),
               ),
             ),

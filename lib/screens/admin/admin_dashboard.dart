@@ -1,11 +1,9 @@
-// lib/screens/admin/admin_dashboard.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dlsud_go/screens/dashboard/main_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../core/theme/app_colors.dart';
+import '../../core/theme/app_theme.dart';
 import '../../models/dashboard_section.dart';
-import '../../widgets/common/custom_button.dart';
 import 'section_editor_screen.dart';
 import 'campus_info_editor_screen.dart';
 
@@ -87,16 +85,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(_getAppBarTitle(), style: const TextStyle(color: Colors.white)),
-        backgroundColor: AppColors.primaryGreen,
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-        ),
+        title: Text(_getAppBarTitle()),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
+            icon: const Icon(Icons.logout),
             onPressed: () {
               Navigator.pushAndRemoveUntil(
                 context,
@@ -129,28 +125,30 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildDrawer() {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return Drawer(
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
           DrawerHeader(
-            decoration: const BoxDecoration(
-              color: AppColors.primaryGreen,
+            decoration: BoxDecoration(
+              color: appColors.primaryGreen,
             ),
-            child: const Column(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 Icon(
                   Icons.admin_panel_settings,
                   size: 48,
-                  color: Colors.white,
+                  color: appColors.textDark,
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Text(
                   'Admin Panel',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: appColors.textDark,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
@@ -168,19 +166,19 @@ class _AdminDashboardState extends State<AdminDashboard> {
             },
           ),
           const Divider(),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Text(
               'CONTENT MANAGEMENT',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: Colors.grey,
+                color: appColors.textMedium,
               ),
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.view_module, color: AppColors.accentBlue),
+            leading: Icon(Icons.view_module, color: appColors.accentBlue),
             title: const Text('Dashboard Sections'),
             selected: _selectedIndex == 1,
             onTap: () {
@@ -189,7 +187,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.info, color: AppColors.warningOrange),
+            leading: Icon(Icons.info, color: appColors.warningOrange),
             title: const Text('Campus Info'),
             selected: _selectedIndex == 2,
             onTap: () {
@@ -228,6 +226,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildDashboardView() {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return StreamBuilder<List<UserFeedback>>(
       stream: _getFeedbackStream(),
       builder: (context, feedbackSnapshot) {
@@ -263,14 +263,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         'Dashboard Sections',
                         '$sectionsCount',
                         Icons.view_module,
-                        AppColors.primaryGreen,
+                        appColors.primaryGreen!,
                         'Active: $activeSections',
                       ),
                       _buildStatCard(
                         'User Feedbacks',
                         '$feedbackCount',
                         Icons.feedback,
-                        AppColors.accentBlue,
+                        appColors.accentBlue!,
                         'Total received',
                       ),
                     ],
@@ -288,7 +288,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     'Manage Dashboard Sections',
                     'Add, edit, or reorder sections',
                     Icons.view_module,
-                    AppColors.primaryGreen,
+                    appColors.primaryGreen!,
                         () => setState(() => _selectedIndex = 1),
                   ),
                   const SizedBox(height: 12),
@@ -296,7 +296,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     'Edit Campus Info',
                     'Update campus information card',
                     Icons.info,
-                    AppColors.warningOrange,
+                    appColors.warningOrange!,
                         () => setState(() => _selectedIndex = 2),
                   ),
                   const SizedBox(height: 12),
@@ -304,7 +304,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     'View Feedbacks',
                     'Check user feedback and ratings',
                     Icons.feedback,
-                    AppColors.accentBlue,
+                    appColors.accentBlue!,
                         () => setState(() => _selectedIndex = 3),
                   ),
                 ],
@@ -317,6 +317,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildStatCard(String title, String value, IconData icon, Color color, String subtitle) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return Card(
       elevation: 4,
       child: Padding(
@@ -350,7 +352,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 subtitle,
                 style: TextStyle(
                   fontSize: 11,
-                  color: Colors.grey[600],
+                  color: appColors.textMedium,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -385,6 +387,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildSectionsView() {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return StreamBuilder<List<DashboardSection>>(
       stream: _getSectionsStream(),
       builder: (context, snapshot) {
@@ -395,13 +399,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
           return Center(child: Text('Error: ${snapshot.error}'));
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.view_module, size: 64, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('No sections yet. Add one to get started!'),
+                Icon(Icons.view_module, size: 64, color: appColors.textMedium),
+                const SizedBox(height: 16),
+                const Text('No sections yet. Add one to get started!'),
               ],
             ),
           );
@@ -424,6 +428,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildSectionCard(DashboardSection section, {required Key key}) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return Card(
       key: key,
       margin: const EdgeInsets.only(bottom: 12),
@@ -431,7 +437,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         leading: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.drag_handle, color: Colors.grey),
+            Icon(Icons.drag_handle, color: appColors.textMedium),
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.all(8),
@@ -463,8 +469,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     style: const TextStyle(fontSize: 11),
                   ),
                   backgroundColor: section.isActive
-                      ? Colors.green.withOpacity(0.1)
-                      : Colors.grey.withOpacity(0.1),
+                      ? appColors.successGreen!.withOpacity(0.1)
+                      : appColors.textLight!.withOpacity(0.1),
                   padding: EdgeInsets.zero,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
@@ -475,7 +481,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       '${section.subsections.length} subsections',
                       style: const TextStyle(fontSize: 11),
                     ),
-                    backgroundColor: Colors.blue.withOpacity(0.1),
+                    backgroundColor: appColors.accentBlue!.withOpacity(0.1),
                     padding: EdgeInsets.zero,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -487,11 +493,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              icon: const Icon(Icons.edit, color: AppColors.accentBlue),
+              icon: Icon(Icons.edit, color: appColors.accentBlue),
               onPressed: () => _navigateToEditor(section),
             ),
             IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
+              icon: Icon(Icons.delete, color: appColors.errorRed),
               onPressed: () => _confirmDelete(section),
             ),
           ],
@@ -539,6 +545,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   void _confirmDelete(DashboardSection section) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -554,7 +562,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Navigator.pop(context);
               _deleteSection(section.id);
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: appColors.errorRed),
             child: const Text('Delete'),
           ),
         ],
@@ -589,11 +597,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildAddSectionFAB() {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
     return FloatingActionButton.extended(
       onPressed: () => _navigateToEditor(null),
       icon: const Icon(Icons.add),
       label: const Text('Add Section'),
-      backgroundColor: AppColors.primaryGreen,
+      backgroundColor: appColors.primaryGreen,
     );
   }
 
@@ -614,14 +623,17 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Color _getColorFromHex(String hexColor) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
     try {
       return Color(int.parse(hexColor.replaceAll('#', '0xFF')));
     } catch (e) {
-      return AppColors.primaryGreen;
+      return appColors.primaryGreen!;
     }
   }
 
   Widget _buildFeedbacksView() {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return StreamBuilder<List<UserFeedback>>(
       stream: _getFeedbackStream(),
       builder: (context, snapshot) {
@@ -668,7 +680,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           DateFormat.yMMMd().add_jm().format(feedback.submittedAt),
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[600],
+                            color: appColors.textMedium,
                           ),
                         ),
                       ],
@@ -694,7 +706,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         children: feedback.positives.map((positive) {
                           return Chip(
                             label: Text(positive),
-                            backgroundColor: AppColors.primaryGreen.withOpacity(0.1),
+                            backgroundColor: appColors.primaryGreen!.withOpacity(0.1),
                           );
                         }).toList(),
                       ),
@@ -709,14 +721,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           feedback.email,
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[700],
+                            color: appColors.textMedium,
                           ),
                         ),
                         Text(
                           'v${feedback.appVersion} (${feedback.platform.split('.').last})',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey[700],
+                            color: appColors.textMedium,
                             fontStyle: FontStyle.italic,
                           ),
                         ),

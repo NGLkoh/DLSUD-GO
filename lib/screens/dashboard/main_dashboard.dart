@@ -1,6 +1,6 @@
 // lib/screens/dashboard/main_dashboard.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:dlsud_go/core/theme/app_colors.dart';
+import 'package:dlsud_go/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import '../../models/dashboard_section.dart';
 import '../../widgets/common/custom_button.dart';
@@ -21,7 +21,8 @@ class _MainDashboardState extends State<MainDashboard> {
   int _currentIndex = 0;
   final PageController _pageController = PageController();
 
-  final List<Widget> _pages = [
+  // Build pages list in the build method so we have access to instance methods
+  List<Widget> get _pages => [
     const DashboardHomeTab(),
     const MapNavigationScreen(),
     const ChatbotScreen(),
@@ -46,7 +47,10 @@ class _MainDashboardState extends State<MainDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return Scaffold(
+      backgroundColor: appColors.backgroundColor,
       body: PageView(
         controller: _pageController,
         physics: const NeverScrollableScrollPhysics(),
@@ -57,16 +61,18 @@ class _MainDashboardState extends State<MainDashboard> {
         },
         children: _pages,
       ),
-      bottomNavigationBar: _buildBottomNavigationBar(),
+      bottomNavigationBar: _buildBottomNavigationBar(appColors),
     );
   }
 
-  Widget _buildBottomNavigationBar() {
+  Widget _buildBottomNavigationBar(AppColorsExtension appColors) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: (appColors.textLight ?? Colors.grey).withOpacity(isDark ? 0.2 : 0.1),
             blurRadius: 10,
             offset: const Offset(0, -5),
           ),
@@ -76,9 +82,9 @@ class _MainDashboardState extends State<MainDashboard> {
         currentIndex: _currentIndex,
         onTap: _onBottomNavTap,
         type: BottomNavigationBarType.fixed,
-        selectedItemColor: AppColors.primaryGreen,
-        unselectedItemColor: AppColors.textLight,
-        backgroundColor: Colors.white,
+        selectedItemColor: appColors.primaryGreen,
+        unselectedItemColor: appColors.textLight,
+        backgroundColor: appColors.cardBackground ?? Theme.of(context).cardColor,
         elevation: 0,
         items: const [
           BottomNavigationBarItem(
@@ -139,35 +145,41 @@ class DashboardHomeTab extends StatelessWidget {
     return iconMap[iconName] ?? Icons.info;
   }
 
-  Color _getColorFromHex(String hexColor) {
+  Color _getColorFromHex(BuildContext context, String hexColor) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
     try {
       return Color(int.parse(hexColor.replaceAll('#', '0xFF')));
     } catch (e) {
-      return AppColors.primaryGreen;
+      return appColors.primaryGreen ?? const Color(0xFF2D6A4F);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+    final primaryGreen = appColors.primaryGreen ?? const Color(0xFF2D6A4F);
+    final lightGreen = appColors.lightGreen ?? const Color(0xFF52B788);
+
     return Scaffold(
-      backgroundColor: AppColors.backgroundColor,
+      backgroundColor: appColors.backgroundColor,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             expandedHeight: 120,
             floating: false,
             pinned: true,
-            backgroundColor: AppColors.backgroundColor,
+            backgroundColor: appColors.backgroundColor,
             elevation: 0,
+            automaticallyImplyLeading: false,
             flexibleSpace: FlexibleSpaceBar(
               background: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      AppColors.primaryGreen,
-                      AppColors.lightGreen,
+                      primaryGreen,
+                      lightGreen,
                     ],
                   ),
                 ),
@@ -177,15 +189,15 @@ class DashboardHomeTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        const Text(
+                      children: const [
+                        Text(
                           'Welcome back,',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                           ),
                         ),
-                        const Text(
+                        Text(
                           'Patriot!',
                           style: TextStyle(
                             color: Colors.white,
@@ -199,19 +211,6 @@ class DashboardHomeTab extends StatelessWidget {
                 ),
               ),
             ),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.search, color: Colors.white),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SearchScreen(),
-                    ),
-                  );
-                },
-              ),
-            ],
           ),
           SliverPadding(
             padding: const EdgeInsets.all(20),
@@ -221,13 +220,27 @@ class DashboardHomeTab extends StatelessWidget {
                   stream: _getSectionsStream(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
+                      return Center(
+                        child: CircularProgressIndicator(
+                          color: appColors.primaryGreen,
+                        ),
+                      );
                     }
                     if (snapshot.hasError) {
-                      return Center(child: Text('Error: ${snapshot.error}'));
+                      return Center(
+                        child: Text(
+                          'Error: ${snapshot.error}',
+                          style: TextStyle(color: appColors.textDark),
+                        ),
+                      );
                     }
                     if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return const Center(child: Text('No sections available'));
+                      return Center(
+                        child: Text(
+                          'No sections available',
+                          style: TextStyle(color: appColors.textDark),
+                        ),
+                      );
                     }
 
                     final sections = snapshot.data!;
@@ -241,7 +254,11 @@ class DashboardHomeTab extends StatelessWidget {
                   stream: _getCampusInfoStream(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
+                      return Center(
+                        child: CircularProgressIndicator(
+                          color: appColors.primaryGreen,
+                        ),
+                      );
                     }
                     if (!snapshot.hasData || snapshot.data!.isEmpty) {
                       return const SizedBox();
@@ -267,7 +284,7 @@ class DashboardHomeTab extends StatelessWidget {
             section.title,
             section.description,
             _getIconFromString(section.iconName),
-            _getColorFromHex(section.colorHex),
+            _getColorFromHex(context, section.colorHex),
                 () {
               if (section.route == 'map_navigation') {
                 Navigator.push(
@@ -290,8 +307,7 @@ class DashboardHomeTab extends StatelessWidget {
                       }).toList(),
                     ),
                   ),
-
-                  );
+                );
               }
             },
           ),
@@ -387,15 +403,17 @@ class DashboardHomeTab extends StatelessWidget {
   }
 
   Widget _buildQuickAccessSection(BuildContext context) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Quick Access',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: AppColors.textDark,
+            color: appColors.textDark,
           ),
         ),
         const SizedBox(height: 16),
@@ -403,9 +421,10 @@ class DashboardHomeTab extends StatelessWidget {
           children: [
             Expanded(
               child: _buildQuickAccessCard(
+                context,
                 'Chat Assistant',
                 Icons.chat,
-                AppColors.primaryGreen,
+                appColors.primaryGreen ?? const Color(0xFF2D6A4F),
                     () {
                   Navigator.push(
                     context,
@@ -417,9 +436,10 @@ class DashboardHomeTab extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: _buildQuickAccessCard(
+                context,
                 'Settings',
                 Icons.settings,
-                AppColors.textMedium,
+                appColors.textMedium ?? Colors.grey,
                     () {
                   Navigator.push(
                     context,
@@ -435,11 +455,14 @@ class DashboardHomeTab extends StatelessWidget {
   }
 
   Widget _buildQuickAccessCard(
+      BuildContext context,
       String title,
       IconData icon,
       Color color,
       VoidCallback onTap,
       ) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
+
     return Card(
       child: InkWell(
         onTap: onTap,
@@ -452,10 +475,10 @@ class DashboardHomeTab extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 title,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color: AppColors.textDark,
+                  color: appColors.textDark,
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -467,12 +490,12 @@ class DashboardHomeTab extends StatelessWidget {
   }
 
   Widget _buildCampusInfoSection(BuildContext context, Map<String, dynamic> data) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
     final title = data['title'] ?? 'De La Salle University-Dasmariñas';
     final subtitle = data['subtitle'] ?? 'Your gateway to campus navigation and services';
     final description = data['description'] ?? '';
     final buttonText = data['button_text'] ?? 'Learn More';
 
-    // FIXED: button_sections is now List<Map>
     final buttonSections = List<Map<String, dynamic>>.from(
         data['button_sections'] ?? []
     );
@@ -489,7 +512,7 @@ class DashboardHomeTab extends StatelessWidget {
                   width: 60,
                   height: 60,
                   decoration: BoxDecoration(
-                    color: AppColors.primaryGreen,
+                    color: appColors.primaryGreen,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: const Icon(Icons.school, color: Colors.white, size: 30),
@@ -499,18 +522,22 @@ class DashboardHomeTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primaryGreen,
-                          )),
+                      Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: appColors.primaryGreen,
+                        ),
+                      ),
                       const SizedBox(height: 4),
-                      Text(subtitle,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textMedium,
-                          )),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: appColors.textMedium,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -521,10 +548,10 @@ class DashboardHomeTab extends StatelessWidget {
               const SizedBox(height: 20),
               Text(
                 description,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 14,
                   height: 1.5,
-                  color: AppColors.textMedium,
+                  color: appColors.textMedium,
                 ),
               ),
             ],
@@ -556,4 +583,5 @@ class DashboardHomeTab extends StatelessWidget {
         ),
       ),
     );
-  }}
+  }
+}

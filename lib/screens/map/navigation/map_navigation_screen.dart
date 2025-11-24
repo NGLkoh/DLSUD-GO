@@ -118,6 +118,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
     _deviationCheckTimer?.cancel();
     pointAnnotationManager?.deleteAll();
     polylineAnnotationManager?.deleteAll();
+    mapboxMap?.dispose();
     super.dispose();
   }
 
@@ -684,14 +685,16 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (_isNavigating) {
-              _stopNavigation();
-            } else {
-              Navigator.of(context).pop();
-            }
-          },
+          icon: const Icon(Icons.arrow_back),onPressed: () async {
+          // Properly dispose Mapbox resources before leaving
+          mapboxMap?.dispose();
+
+          // Also dispose annotation managers if needed
+          await pointAnnotationManager?.deleteAll();
+          await polylineAnnotationManager?.deleteAll();
+
+          if (mounted) Navigator.of(context).pop();
+        },
         ),
         title: Text(_isNavigating ? 'Navigating' : 'DLSU-D Campus'),
         actions: [
@@ -1238,6 +1241,7 @@ class LocationSearchSheet extends StatefulWidget {
 
   @override
   State<LocationSearchSheet> createState() => _LocationSearchSheetState();
+  
 }
 
 class _LocationSearchSheetState extends State<LocationSearchSheet> {
@@ -1257,6 +1261,7 @@ class _LocationSearchSheetState extends State<LocationSearchSheet> {
   void dispose() {
     _debounce?.cancel();
     _searchController.dispose();
+
     super.dispose();
   }
 

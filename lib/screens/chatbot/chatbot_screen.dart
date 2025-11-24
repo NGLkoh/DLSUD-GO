@@ -1,6 +1,62 @@
 // lib/screens/chatbot/chatbot_screen.dart
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_colors.dart';
+// ADD THESE
+import 'package:http/http.dart' as http;
+import 'package:googleapis_auth/auth_io.dart';
+
+
+
+// ADD THE FUNCTION HERE
+Future<String> sendToDialogflow(String text) async {
+  try {
+    final jsonKey = await rootBundle.loadString('assets/dialogflow_key.json');
+    final Map<String, dynamic> keyMap = jsonDecode(jsonKey);
+
+    final String projectId = keyMap["project_id"];
+
+    final credentials = ServiceAccountCredentials.fromJson(jsonKey);
+
+    final client = await clientViaServiceAccount(
+      credentials,
+      ['https://www.googleapis.com/auth/cloud-platform'],
+    );
+
+    final url =
+        "https://dialogflow.googleapis.com/v2/projects/$projectId/agent/sessions/flutter-session:detectIntent";
+
+    final response = await client.post(
+      Uri.parse(url),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "queryInput": {
+          "text": {"text": text, "languageCode": "en"}
+        }
+      }),
+    );
+
+    client.close();
+
+    final data = jsonDecode(response.body);
+
+    // Debug print
+    print("DF RESPONSE: ${response.body}");
+
+    final queryResult = data["queryResult"];
+
+    if (queryResult == null) {
+      return "I'm having trouble connecting. Try again.";
+    }
+
+    return queryResult["fulfillmentText"] ?? "I couldn't understand that.";
+
+  } catch (e) {
+    print("ERROR: $e");
+    return "I can't connect to the server right now.";
+  }
+}
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -15,10 +71,31 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   final List<ChatMessage> _messages = [];
   bool _isTyping = false;
 
+
+
   @override
   void initState() {
     super.initState();
     _addWelcomeMessage();
+  }
+
+  Future<void> _initializeDialogflow() async {
+    try {
+      final String response = await rootBundle.loadString('assets/dialogflow_key.json');
+      final data = json.decode(response);
+
+    } catch (e) {
+      if (mounted) {
+        final botResponse = ChatMessage(
+          text: 'Initialization Error: ${e.toString()}',
+          isUser: false,
+          timestamp: DateTime.now(),
+        );
+        setState(() {
+          _messages.add(botResponse);
+        });
+      }
+    }
   }
 
   @override
@@ -29,15 +106,17 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   }
 
   void _addWelcomeMessage() {
-    setState(() {
-      _messages.add(
-        ChatMessage(
-          text: 'Hi there, Patriot! 👋\n\nI\'m Lily, your friendly DLSU-D campus guide! I\'m here to help make your campus life easier. I can assist you with:\n\n🗺️ Campus navigation and directions\n🎓 Student services information\n📚 Academic programs and requirements\n🏢 Office locations and hours\n❓ General campus questions\n\nFeel free to ask me anything about DLSU-D! What can I help you with today?',
-          isUser: false,
-          timestamp: DateTime.now(),
-        ),
-      );
-    });
+    if (mounted) {
+      setState(() {
+        _messages.add(
+          ChatMessage(
+            text: 'Hi there, Patriot! 👋\n\nI\'m Lily, your friendly DLSU-D campus guide! I\'m here to help make your campus life easier. I can assist you with:\n\n🗺️ Campus navigation and directions\n🎓 Student services information\n📚 Academic programs and requirements\n🏢 Office locations and hours\n❓ General campus questions\n\nFeel free to ask me anything about DLSU-D! What can I help you with today?',
+            isUser: false,
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+    }
   }
 
   Future<void> _sendMessage(String text) async {
@@ -49,58 +128,50 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       timestamp: DateTime.now(),
     );
 
-    setState(() {
-      _messages.add(userMessage);
-      _isTyping = true;
-    });
+    if (mounted) {
+      setState(() {
+        _messages.add(userMessage);
+        _isTyping = true;
+      });
+    }
 
     _messageController.clear();
     _scrollToBottom();
 
-    // Simulate API call delay
-    await Future.delayed(const Duration(milliseconds: 1000));
+    try {
+      // CALL DIALOGFLOW REST API
+      String fulfillmentText = await sendToDialogflow(text.trim());
 
-    // Generate bot response based on user input
-    final botResponse = _generateBotResponse(text.trim().toLowerCase());
+      final botResponse = ChatMessage(
+        text: fulfillmentText.isEmpty
+            ? "I'm sorry, I couldn’t understand that. Can you rephrase?"
+            : fulfillmentText,
+        isUser: false,
+        timestamp: DateTime.now(),
+      );
 
-    setState(() {
-      _messages.add(botResponse);
-      _isTyping = false;
-    });
+      if (mounted) {
+        setState(() {
+          _messages.add(botResponse);
+          _isTyping = false;
+        });
+      }
+    } catch (e) {
+      final botResponse = ChatMessage(
+        text: 'Connection Error: ${e.toString()}',
+        isUser: false,
+        timestamp: DateTime.now(),
+      );
 
-    _scrollToBottom();
-  }
-
-  ChatMessage _generateBotResponse(String userInput) {
-    String response;
-
-    // Simple keyword-based responses (in production, this would connect to Dialogflow)
-    if (userInput.contains('payment') || userInput.contains('tuition') || userInput.contains('cashier')) {
-      response = '💳 Great question! Here\'s what I know about payments:\n\nThe Cashier\'s Office is located at the ground floor of Ayuntamiento de Gonzales Hall. They\'re available Monday to Friday, 8:00 AM to 4:00 PM (excluding holidays).\n\n✨ Payment options:\n• Full payment (with 10% discount)\n• Installment plans\n• Monthly payment schemes\n\nWould you like directions to the Cashier office? I can guide you there! 😊';
-    } else if (userInput.contains('admission') || userInput.contains('enroll') || userInput.contains('apply')) {
-      response = '🎓 Exciting! Welcome to the DLSU-D family! We have an open admission policy for all senior high school graduates.\n\n📋 You\'ll need:\n• High school diploma\n• Official transcripts\n• Birth certificate (NSO)\n• Medical certificate\n• 2x2 ID photos\n\nWould you like to know more about our programs or the application process? I\'m here to help! ✨';
-    } else if (userInput.contains('map') || userInput.contains('direction') || userInput.contains('location') || userInput.contains('where')) {
-      response = '🗺️ Navigation assistance! I\'m happy to help!\n\nYou can use the Maps feature in the app to:\n• Get turn-by-turn directions\n• Search for buildings and offices\n• Find walking routes between locations\n\nSome popular destinations:\n🏫 Julian Felipe Hall • 🏢 Ayuntamiento de Gonzales Hall • 📚 Library • 🍽️ Cafeteria\n\nWhich location are you looking for? 😊';
-    } else if (userInput.contains('office hours') || userInput.contains('schedule') || userInput.contains('time')) {
-      response = '⏰ Here\'s what I found about office hours:\n\n🏢 Administrative Offices:\nMonday - Friday: 8:00 AM - 4:00 PM\n\n📚 Library:\nMonday - Friday: 7:00 AM - 7:00 PM\nSaturday: 8:00 AM - 5:00 PM\n\n🏥 Health Services:\nMonday - Friday: 8:00 AM - 5:00 PM\n\nIs there a specific office you need? I can give you more details! ✨';
-    } else if (userInput.contains('program') || userInput.contains('course') || userInput.contains('degree')) {
-      response = '📚 Wonderful question! DLSU-D offers amazing academic programs:\n\n🎓 Undergraduate Degrees:\n• Business & Economics\n• Engineering & Technology\n• Liberal Arts & Communication\n• Education & Human Development\n• Science & Mathematics\n\n📖 Graduate Programs:\n• Master\'s degrees\n• Doctoral programs\n\nWhich field interests you? I\'d love to tell you more! 😊';
-    } else if (userInput.contains('help') || userInput.contains('support')) {
-      response = '🌟 Of course! I\'m Lily, and I\'m here to help with:\n\n📍 Campus navigation & directions\n📋 Student services\n💳 Payment information\n🏫 Office locations & hours\n📚 Academic programs\n⏰ Schedules\n📞 Contact information\n\nWhat can I assist you with today, Patriot? 😊';
-    } else if (userInput.contains('hello') || userInput.contains('hi') || userInput.contains('good morning') || userInput.contains('good afternoon')) {
-      response = 'Hey there, Patriot! 👋 Welcome back!\n\nI\'m Lily, your friendly campus guide. I\'m here to help you navigate DLSU-D, find information about services, answer questions about student life, and make your campus experience amazing!\n\nWhat can I help you with today? 🌟';
-    } else if (userInput.contains('thank') || userInput.contains('salamat')) {
-      response = 'Aw, you\'re so welcome! 🥰 I\'m always happy to help my fellow Patriots!\n\nIf you have any other questions about DLSU-D, just ask anytime. Have an amazing day on campus! 🌟';
-    } else {
-      // Default response for unrecognized input
-      response = 'I understand you\'re asking about "$userInput"! I\'m still learning, but I can definitely help with:\n\n🗺️ Campus navigation\n📋 Student services\n🏢 Office locations\n⏰ Hours & schedules\n💳 Payments & enrollment\n📚 Academic programs\n\nCould you try rephrasing, or ask about one of these topics? I\'m here to help! 😊';
+      if (mounted) {
+        setState(() {
+          _messages.add(botResponse);
+          _isTyping = false;
+        });
+      }
     }
 
-    return ChatMessage(
-      text: response,
-      isUser: false,
-      timestamp: DateTime.now(),
-    );
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -191,10 +262,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: AppColors.surfaceColor,
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.language, size: 16, color: AppColors.textMedium),
-                const SizedBox(width: 8),
+                Icon(Icons.language, size: 16, color: AppColors.textMedium),
+                SizedBox(width: 8),
                 Text(
                   'English/Filipino support available',
                   style: TextStyle(
@@ -205,7 +276,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               ],
             ),
           ),
-          
+
           // Messages list
           Expanded(
             child: ListView.builder(
@@ -218,10 +289,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               },
             ),
           ),
-          
+
           // Typing indicator
           if (_isTyping) _buildTypingIndicator(),
-          
+
           // Message input
           _buildMessageInput(),
         ],
@@ -246,7 +317,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             ),
             const SizedBox(width: 8),
           ],
-          
+
           Flexible(
             child: Container(
               padding: const EdgeInsets.all(12),
@@ -280,7 +351,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               ),
             ),
           ),
-          
+
           if (isUser) ...[
             const SizedBox(width: 8),
             const CircleAvatar(
@@ -344,6 +415,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           ),
         );
       },
+      onEnd: () {
+        // Restart animation for continuous loop
+        if (mounted) {
+          setState(() {});
+        }
+      },
     );
   }
 
@@ -380,9 +457,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               ),
             ),
           ),
-          
+
           const SizedBox(width: 12),
-          
+
           FloatingActionButton(
             mini: true,
             backgroundColor: AppColors.primaryGreen,
@@ -397,7 +474,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   String _formatTime(DateTime dateTime) {
     final now = DateTime.now();
     final difference = now.difference(dateTime);
-    
+
     if (difference.inMinutes < 1) {
       return 'Now';
     } else if (difference.inMinutes < 60) {
@@ -460,7 +537,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               SizedBox(height: 6),
               Text('📚 Student services & academic info'),
               SizedBox(height: 6),
-              Text('🏢 Office locations and hours'),
+              Text('🏢 Office locations and hour'),
               SizedBox(height: 6),
               Text('💳 Payment and enrollment details'),
               SizedBox(height: 6),

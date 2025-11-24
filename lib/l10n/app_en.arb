@@ -1,9 +1,4 @@
 {
-  "appTitle": "DLSU-D Go!",
-  "settings": "Settings",
-  "language": "Language",
-  "theme": "Theme",
-  "light": "Light",
-  "dark": "Dark",
-  "system": "System"
+  "@@locale": "en",
+  "appTitle": "DLSU-D Go"
 }

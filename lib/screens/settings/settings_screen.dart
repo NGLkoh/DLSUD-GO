@@ -1,7 +1,6 @@
+import 'package:dlsud_go/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import '../../core/theme/app_colors.dart';
 import '../../services/settings_service.dart';
 import '../auth/admin_login_screen.dart';
 import '../feedback/feedback_screen.dart';
@@ -12,25 +11,28 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = Provider.of<SettingsService>(context);
-    final l10n = AppLocalizations.of(context)!;
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.settings),
+        title: const Text('Settings'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _buildSettingsSection(
+            context,
             'General',
             [
               _buildSettingsTile(
+                context,
                 'App Information',
                 'Version, developer info',
                 Icons.info_outline,
                 () => _showAppInfoDialog(context),
               ),
               _buildSettingsTile(
+                context,
                 'Accessibility',
                 'Text size, contrast',
                 Icons.accessibility,
@@ -40,10 +42,12 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           _buildSettingsSection(
-            l10n.theme,
+            context,
+            'Theme',
             [
               _buildSettingsTile(
-                l10n.theme,
+                context,
+                'Theme',
                 settings.themeMode.toString().split('.').last,
                 Icons.palette,
                 () => _showThemeDialog(context, settings),
@@ -52,11 +56,13 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           _buildSettingsSection(
-            l10n.language,
+            context,
+            'Language',
             [
               _buildSettingsTile(
-                l10n.language,
-                l10n.language,
+                context,
+                'Language',
+                settings.locale.languageCode == 'en' ? 'English' : 'Filipino',
                 Icons.language,
                 () => _showLanguageDialog(context, settings),
               ),
@@ -64,9 +70,11 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           _buildSettingsSection(
+            context,
             'Support',
             [
               _buildSettingsTile(
+                context,
                 'Feedback',
                 'Send suggestions or report issues',
                 Icons.feedback,
@@ -81,9 +89,11 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           _buildSettingsSection(
+            context,
             'Administration',
             [
               _buildSettingsTile(
+                context,
                 'Admin Login',
                 'Access administrative features',
                 Icons.admin_panel_settings,
@@ -93,7 +103,7 @@ class SettingsScreen extends StatelessWidget {
                     MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
                   );
                 },
-                color: AppColors.primaryGreen,
+                color: appColors.primaryGreen,
               ),
             ],
           ),
@@ -102,7 +112,8 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildSettingsSection(String title, List<Widget> children) {
+  Widget _buildSettingsSection(BuildContext context, String title, List<Widget> children) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -113,7 +124,7 @@ class SettingsScreen extends StatelessWidget {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: AppColors.textMedium,
+              color: appColors.textMedium,
               letterSpacing: 0.5,
             ),
           ),
@@ -127,16 +138,18 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildSettingsTile(
+    BuildContext context,
     String title,
     String subtitle,
     IconData icon,
     VoidCallback onTap, {
     Color? color,
   }) {
+    final appColors = Theme.of(context).extension<AppColorsExtension>()!;
     return ListTile(
       leading: Icon(
         icon,
-        color: color ?? AppColors.primaryGreen,
+        color: color ?? appColors.primaryGreen,
       ),
       title: Text(
         title,
@@ -149,7 +162,7 @@ class SettingsScreen extends StatelessWidget {
         subtitle,
         style: TextStyle(
           fontSize: 14,
-          color: AppColors.textMedium,
+          color: appColors.textMedium,
         ),
       ),
       trailing: const Icon(Icons.arrow_forward_ios, size: 16),
@@ -200,16 +213,15 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _showThemeDialog(BuildContext context, SettingsService settings) {
-    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(l10n.theme),
+        title: const Text('Theme'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             RadioListTile<ThemeMode>(
-              title: Text(l10n.light),
+              title: const Text('Light'),
               value: ThemeMode.light,
               groupValue: settings.themeMode,
               onChanged: (value) {
@@ -218,7 +230,7 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             RadioListTile<ThemeMode>(
-              title: Text(l10n.dark),
+              title: const Text('Dark'),
               value: ThemeMode.dark,
               groupValue: settings.themeMode,
               onChanged: (value) {
@@ -227,7 +239,7 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             RadioListTile<ThemeMode>(
-              title: Text(l10n.system),
+              title: const Text('System'),
               value: ThemeMode.system,
               groupValue: settings.themeMode,
               onChanged: (value) {
@@ -242,11 +254,10 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _showLanguageDialog(BuildContext context, SettingsService settings) {
-    final l10n = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(l10n.language),
+        title: const Text('Language'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
