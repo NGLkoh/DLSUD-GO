@@ -2,8 +2,10 @@
 import 'package:dlsud_go/core/configurations/constants/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../auth/terms_conditions_screen.dart';
+import '../dashboard/main_dashboard.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -22,13 +24,13 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-    
+
     // Initialize animation controllers
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-    
+
     _scaleController = AnimationController(
       duration: const Duration(milliseconds: 1200),
       vsync: this,
@@ -58,11 +60,11 @@ class _SplashScreenState extends State<SplashScreen>
   void _startSplashSequence() async {
     // Start fade animation
     _fadeController.forward();
-    
+
     // Start scale animation with a slight delay
     await Future.delayed(const Duration(milliseconds: 300));
     _scaleController.forward();
-    
+
     // Navigate after splash duration
     Timer(const Duration(seconds: AppConstants.splashDuration), () {
       if (mounted) {
@@ -71,11 +73,26 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
-  void _navigateToNext() {
+  void _navigateToNext() async {
+    // Check if terms have been accepted
+    final prefs = await SharedPreferences.getInstance();
+    final termsAccepted = prefs.getBool('terms_accepted') ?? false;
+
+    if (!mounted) return;
+
+    Widget destination;
+
+    if (termsAccepted) {
+      // Terms already accepted, go to main dashboard
+      destination = const MainDashboard();
+    } else {
+      // First time user, show terms
+      destination = const TermsConditionsScreen(isFirstTime: true);
+    }
+
     Navigator.of(context).pushReplacement(
       PageRouteBuilder(
-        pageBuilder: (context, animation, secondaryAnimation) => 
-            const TermsConditionsScreen(),
+        pageBuilder: (context, animation, secondaryAnimation) => destination,
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           return FadeTransition(opacity: animation, child: child);
         },
@@ -126,7 +143,7 @@ class _SplashScreenState extends State<SplashScreen>
                           borderRadius: BorderRadius.circular(30),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.2),
+                              color: Colors.black.withAlpha(51),
                               blurRadius: 20,
                               offset: const Offset(0, 10),
                             ),
@@ -140,9 +157,9 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 32),
-                  
+
                   // App name with fade animation
                   FadeTransition(
                     opacity: _fadeAnimation,
@@ -156,9 +173,9 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   // Subtitle with delayed fade
                   FadeTransition(
                     opacity: _fadeAnimation,
@@ -171,9 +188,9 @@ class _SplashScreenState extends State<SplashScreen>
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 60),
-                  
+
                   // Loading indicator
                   FadeTransition(
                     opacity: _fadeAnimation,
@@ -217,18 +234,32 @@ class _SplashScreenWithLogoState extends State<SplashScreenWithLogo>
       duration: const Duration(milliseconds: 2000),
       vsync: this,
     );
-    
+
     _animation = CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeInOut,
     );
 
     _animationController.forward();
-    
-    Timer(const Duration(seconds: AppConstants.splashDuration), () {
+
+    Timer(const Duration(seconds: AppConstants.splashDuration), () async {
       if (mounted) {
+        // Check if terms have been accepted
+        final prefs = await SharedPreferences.getInstance();
+        final termsAccepted = prefs.getBool('terms_accepted') ?? false;
+
+        if (!mounted) return;
+
+        Widget destination;
+
+        if (termsAccepted) {
+          destination = const MainDashboard();
+        } else {
+          destination = const TermsConditionsScreen(isFirstTime: true);
+        }
+
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const TermsConditionsScreen()),
+          MaterialPageRoute(builder: (context) => destination),
         );
       }
     });
@@ -270,9 +301,9 @@ class _SplashScreenWithLogoState extends State<SplashScreenWithLogo>
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 40),
-              
+
               const Text(
                 AppConstants.appName,
                 style: TextStyle(
@@ -281,9 +312,9 @@ class _SplashScreenWithLogoState extends State<SplashScreenWithLogo>
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              
+
               const SizedBox(height: 8),
-              
+
               const Text(
                 'Smart Campus Navigation',
                 style: TextStyle(

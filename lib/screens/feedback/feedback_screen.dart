@@ -1,4 +1,5 @@
 // lib/screens/feedback/feedback_screen.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/common/custom_button.dart';
@@ -14,13 +15,12 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   final _formKey = GlobalKey<FormState>();
   final _feedbackController = TextEditingController();
   final _emailController = TextEditingController();
-  
-  int _rating = 4; // Default rating from the mockup
+
+  int _rating = 4;
   final List<String> _selectedPositives = [];
   final List<String> _selectedImprovements = [];
   bool _isSubmitting = false;
 
-  // Feedback options from the mockup
   final List<String> _positiveOptions = [
     'EASY TO NAVIGATE',
     'VISUALLY CLEAR',
@@ -43,7 +43,22 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
   }
 
   Future<void> _submitFeedback() async {
+    // Validate form
     if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    // Additional validation: ensure at least some feedback is provided
+    if (_selectedPositives.isEmpty &&
+        _selectedImprovements.isEmpty &&
+        _feedbackController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please provide at least one form of feedback'),
+          backgroundColor: Colors.orange[700],
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
       return;
     }
 
@@ -51,16 +66,83 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       _isSubmitting = true;
     });
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Get a reference to the Firestore collection
+      final collection = FirebaseFirestore.instance.collection('feedback');
 
-    if (mounted) {
-      setState(() {
-        _isSubmitting = false;
-      });
+      // Prepare the feedback data
+      final feedbackData = {
+        'rating': _rating,
+        'positives': _selectedPositives,
+        'improvements': _selectedImprovements,
+        'additional_feedback': _feedbackController.text.trim(),
+        'email': _emailController.text.trim().isEmpty
+            ? null
+            : _emailController.text.trim(),
+        'submitted_at': FieldValue.serverTimestamp(),
+        'app_version': '1.0.0', // You can get this from package_info_plus
+        'platform': Theme.of(context).platform.toString(),
+      };
 
-      // Show success dialog
-      _showSuccessDialog();
+      // Add the document to Firestore
+      final docRef = await collection.add(feedbackData);
+
+      // Log success for debugging
+      debugPrint('Feedback submitted successfully with ID: ${docRef.id}');
+
+      if (mounted) {
+        _showSuccessDialog();
+      }
+    } on FirebaseException catch (e) {
+      // Handle Firebase-specific errors
+      debugPrint('Firebase error: ${e.code} - ${e.message}');
+
+      if (mounted) {
+        String errorMessage = 'Failed to submit feedback. ';
+
+        switch (e.code) {
+          case 'permission-denied':
+            errorMessage += 'Permission denied. Please check Firestore rules.';
+            break;
+          case 'unavailable':
+            errorMessage += 'Service unavailable. Please check your connection.';
+            break;
+          case 'unauthenticated':
+            errorMessage += 'Authentication required.';
+            break;
+          default:
+            errorMessage += e.message ?? 'Unknown error occurred.';
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      // Handle any other errors
+      debugPrint('Unexpected error: $e');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('An unexpected error occurred: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
@@ -69,22 +151,38 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         icon: const Icon(
           Icons.check_circle,
           color: AppColors.primaryGreen,
-          size: 48,
+          size: 64,
         ),
-        title: const Text('Thank You!'),
+        title: const Text(
+          'Thank You!',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: const Text(
           'Your feedback has been submitted successfully. We appreciate your input and will use it to improve DLSU-D Go!',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16),
         ),
+        actionsAlignment: MainAxisAlignment.center,
         actions: [
-          CustomButton(
-            text: 'Continue',
-            onPressed: () {
-              Navigator.of(context).pop(); // Close dialog
-              Navigator.of(context).pop(); // Close feedback screen
-            },
+          SizedBox(
+            width: 200,
+            child: CustomButton(
+              text: 'Continue',
+              onPressed: () {
+                Navigator.of(context).pop(); // Close dialog
+                Navigator.of(context).pop(); // Close feedback screen
+              },
+            ),
           ),
         ],
       ),
@@ -111,38 +209,20 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
               _buildHeader(),
-              
               const SizedBox(height: 32),
-              
-              // Rating section
               _buildRatingSection(),
-              
               const SizedBox(height: 32),
-              
-              // What did you like section
               _buildLikedSection(),
-              
               const SizedBox(height: 32),
-              
-              // Improvement section
               _buildImprovementSection(),
-              
               const SizedBox(height: 32),
-              
-              // Additional feedback
               _buildAdditionalFeedbackSection(),
-              
               const SizedBox(height: 32),
-              
-              // Email field (optional)
               _buildEmailSection(),
-              
               const SizedBox(height: 40),
-              
-              // Submit button
               _buildSubmitButton(),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -162,9 +242,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             color: AppColors.textDark,
           ),
         ),
-        
         const SizedBox(height: 8),
-        
         Text(
           'Your feedback helps us improve the app experience for all Patriots.',
           style: TextStyle(
@@ -189,9 +267,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             color: AppColors.textDark,
           ),
         ),
-        
         const SizedBox(height: 16),
-        
         Row(
           children: List.generate(5, (index) {
             return GestureDetector(
@@ -204,22 +280,21 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 padding: const EdgeInsets.only(right: 8),
                 child: Icon(
                   Icons.star,
-                  size: 32,
-                  color: index < _rating 
-                      ? AppColors.primaryGreen 
+                  size: 40,
+                  color: index < _rating
+                      ? AppColors.primaryGreen
                       : Colors.grey[300],
                 ),
               ),
             );
           }),
         ),
-        
         const SizedBox(height: 8),
-        
         Text(
           _getRatingText(_rating),
           style: TextStyle(
             fontSize: 14,
+            fontWeight: FontWeight.w500,
             color: AppColors.textMedium,
           ),
         ),
@@ -239,9 +314,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             color: AppColors.textDark,
           ),
         ),
-        
         const SizedBox(height: 16),
-        
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -258,19 +331,20 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 });
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.primaryGreen : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isSelected ? AppColors.primaryGreen : Colors.grey[400]!,
+                    width: 1.5,
                   ),
                 ),
                 child: Text(
                   option,
                   style: TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     color: isSelected ? Colors.white : AppColors.textMedium,
                   ),
                 ),
@@ -294,9 +368,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             color: AppColors.textDark,
           ),
         ),
-        
         const SizedBox(height: 16),
-        
         Wrap(
           spacing: 12,
           runSpacing: 12,
@@ -313,19 +385,20 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
                 });
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: isSelected ? AppColors.errorRed : Colors.transparent,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
                     color: isSelected ? AppColors.errorRed : Colors.grey[400]!,
+                    width: 1.5,
                   ),
                 ),
                 child: Text(
                   option,
                   style: TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    fontWeight: FontWeight.w600,
                     color: isSelected ? Colors.white : AppColors.textMedium,
                   ),
                 ),
@@ -349,12 +422,11 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             color: AppColors.textDark,
           ),
         ),
-        
         const SizedBox(height: 16),
-        
         TextFormField(
           controller: _feedbackController,
           maxLines: 5,
+          maxLength: 500,
           decoration: InputDecoration(
             hintText: 'Tell us everything.',
             hintStyle: TextStyle(color: AppColors.textLight),
@@ -370,15 +442,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: AppColors.primaryGreen, width: 2),
             ),
+            counterText: '',
           ),
-          validator: (value) {
-            if ((value == null || value.trim().isEmpty) && 
-                _selectedPositives.isEmpty && 
-                _selectedImprovements.isEmpty) {
-              return 'Please provide some feedback or select options above';
-            }
-            return null;
-          },
         ),
       ],
     );
@@ -396,9 +461,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             color: AppColors.textDark,
           ),
         ),
-        
         const SizedBox(height: 8),
-        
         Text(
           'We may reach out for follow-up questions or to inform you about updates.',
           style: TextStyle(
@@ -406,9 +469,7 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             color: AppColors.textMedium,
           ),
         ),
-        
         const SizedBox(height: 16),
-        
         TextFormField(
           controller: _emailController,
           keyboardType: TextInputType.emailAddress,
@@ -418,10 +479,18 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
             ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey[300]!),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primaryGreen, width: 2),
+            ),
           ),
           validator: (value) {
             if (value != null && value.isNotEmpty) {
-              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+              if (!RegExp(r'^[\w\.-]+@[\w\.-]+\.\w{2,}$').hasMatch(value)) {
                 return 'Please enter a valid email address';
               }
             }
@@ -434,8 +503,8 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
 
   Widget _buildSubmitButton() {
     return CustomButton(
-      text: 'Submit',
-      onPressed: _submitFeedback,
+      text: _isSubmitting ? 'Submitting...' : 'Submit Feedback',
+      onPressed: _isSubmitting ? null : _submitFeedback,
       isLoading: _isSubmitting,
       width: double.infinity,
       height: 56,
@@ -457,155 +526,5 @@ class _FeedbackScreenState extends State<FeedbackScreen> {
       default:
         return '';
     }
-  }
-}
-
-// Alternative minimal feedback screen
-class SimpleFeedbackScreen extends StatefulWidget {
-  const SimpleFeedbackScreen({super.key});
-
-  @override
-  State<SimpleFeedbackScreen> createState() => _SimpleFeedbackScreenState();
-}
-
-class _SimpleFeedbackScreenState extends State<SimpleFeedbackScreen> {
-  final _messageController = TextEditingController();
-  final _emailController = TextEditingController();
-  String _selectedCategory = 'General Feedback';
-  bool _isSubmitting = false;
-
-  final List<String> _categories = [
-    'General Feedback',
-    'Bug Report',
-    'Feature Request',
-    'Navigation Issue',
-    'Content Error',
-    'Other',
-  ];
-
-  @override
-  void dispose() {
-    _messageController.dispose();
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submitFeedback() async {
-    if (_messageController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your feedback')),
-      );
-      return;
-    }
-
-    setState(() {
-      _isSubmitting = true;
-    });
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (mounted) {
-      setState(() {
-        _isSubmitting = false;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Thank you for your feedback!'),
-          backgroundColor: AppColors.primaryGreen,
-        ),
-      );
-
-      Navigator.pop(context);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Send Feedback'),
-        backgroundColor: AppColors.primaryGreen,
-        foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'We value your feedback!',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            
-            const SizedBox(height: 20),
-            
-            // Category selection
-            DropdownButtonFormField<String>(
-              value: _selectedCategory,
-              decoration: const InputDecoration(
-                labelText: 'Category',
-                border: OutlineInputBorder(),
-              ),
-              items: _categories.map((category) {
-                return DropdownMenuItem(
-                  value: category,
-                  child: Text(category),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedCategory = value!;
-                });
-              },
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // Message field
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                maxLines: null,
-                expands: true,
-                decoration: const InputDecoration(
-                  labelText: 'Your message',
-                  hintText: 'Describe your feedback, suggestion, or issue...',
-                  border: OutlineInputBorder(),
-                  alignLabelWithHint: true,
-                ),
-              ),
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // Email field
-            TextField(
-              controller: _emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email (optional)',
-                hintText: 'For follow-up questions',
-                border: OutlineInputBorder(),
-                prefixIcon: Icon(Icons.email),
-              ),
-            ),
-            
-            const SizedBox(height: 24),
-            
-            // Submit button
-            CustomButton(
-              text: 'Send Feedback',
-              onPressed: _submitFeedback,
-              isLoading: _isSubmitting,
-              width: double.infinity,
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

@@ -47,6 +47,7 @@ class _MainDashboardState extends State<MainDashboard> {
     return Scaffold(
       body: PageView(
         controller: _pageController,
+        physics: const NeverScrollableScrollPhysics(), // Disable swipe
         onPageChanged: (index) {
           setState(() {
             _currentIndex = index;

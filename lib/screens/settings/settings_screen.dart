@@ -53,7 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               _buildSettingsTile(
                 'App Permissions',
-                'Location, camera, notifications',
+                'Location, notifications',
                 Icons.security,
                 () => _showPermissionsDialog(context),
               ),
@@ -66,20 +66,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSettingsSection(
             'Display',
             [
-              _buildSwitchTile(
-                'High Contrast Display Mode',
-                'Enhance visibility with high contrast',
-                Icons.contrast,
-                _highContrastMode,
-                (value) {
-                  setState(() {
-                    _highContrastMode = value;
-                  });
-                },
-              ),
               _buildSettingsTile(
                 'Appearance',
-                'Theme, colors, layout preferences',
+                'Theme',
                 Icons.palette,
                 () => _showAppearanceDialog(context),
               ),
@@ -103,12 +92,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 'Data usage, location settings',
                 Icons.privacy_tip,
                 () => _showPrivacyDialog(context),
-              ),
-              _buildSettingsTile(
-                'Preferences',
-                'Default locations, notifications',
-                Icons.tune,
-                () => _showPreferencesDialog(context),
               ),
             ],
           ),
