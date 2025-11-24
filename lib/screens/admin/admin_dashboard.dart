@@ -1,8 +1,8 @@
 // lib/screens/admin/admin_dashboard.dart
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/common/custom_button.dart';
-import '../dashboard/main_dashboard.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -11,7 +11,45 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
+class UserFeedback {
+  final String id;
+  final String email;
+  final int rating;
+  final String additionalFeedback;
+  final List<String> positives;
+  final String improvements;
+  final String appVersion;
+  final DateTime submittedAt;
+
+  UserFeedback({
+    required this.id,
+    required this.email,
+    required this.rating,
+    required this.additionalFeedback,
+    required this.positives,
+    required this.improvements,
+    required this.appVersion,
+    required this.submittedAt,
+  });
+
+  factory UserFeedback.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return UserFeedback(
+      id: doc.id,
+      email: data['email'] ?? '',
+      rating: data['rating'] ?? 0,
+      additionalFeedback: data['additionalFeedback'] ?? '',
+      positives: List<String>.from(data['positives'] ?? []),
+      improvements: data['improvements'] ?? '',
+      appVersion: data['appVersion'] ?? '',
+      submittedAt: (data['submittedAt'] as Timestamp).toDate(),
+    );
+  }
+}
+
 class _AdminDashboardState extends State<AdminDashboard> {
+  int _selectedIndex = 0; // 0: Dashboard, 1-8: Pages, 9: Feedbacks
+
   final List<AdminPage> _pages = [
     AdminPage(
       title: 'Admissions',
@@ -63,244 +101,315 @@ class _AdminDashboardState extends State<AdminDashboard> {
     ),
   ];
 
+  Stream<List<UserFeedback>> _getFeedbackStream() {
+    return FirebaseFirestore.instance
+        .collection('feedback')
+        .orderBy('submittedAt', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => UserFeedback.fromFirestore(doc))
+        .toList());
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        title: const Text('Admin Dashboard'),
-        backgroundColor: AppColors.backgroundColor,
-        elevation: 1,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: Text(_getAppBarTitle()),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: () => _showLogoutDialog(),
+            onPressed: () {
+              // TODO: Implement logout
+            },
           ),
         ],
       ),
-      body: Column(
+      drawer: _buildDrawer(),
+      body: _buildBody(),
+    );
+  }
+
+  String _getAppBarTitle() {
+    if (_selectedIndex == 0) return 'Admin Dashboard';
+    if (_selectedIndex >= 1 && _selectedIndex <= 8) {
+      return _pages[_selectedIndex - 1].title;
+    }
+    return 'User Feedbacks';
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
         children: [
-          // Welcome header
-          _buildWelcomeHeader(),
-          
-          // Pages list
-          Expanded(
-            child: _buildPagesList(),
+          DrawerHeader(
+            decoration: BoxDecoration(
+              color: AppColors.primaryGreen,
+            ),
+            child: const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Icon(
+                  Icons.admin_panel_settings,
+                  size: 48,
+                  color: Colors.white,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'Admin Panel',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.dashboard),
+            title: const Text('Dashboard'),
+            selected: _selectedIndex == 0,
+            onTap: () {
+              setState(() => _selectedIndex = 0);
+              Navigator.pop(context);
+            },
+          ),
+          const Divider(),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Text(
+              'PAGES',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          ..._pages.asMap().entries.map((entry) {
+            int idx = entry.key;
+            AdminPage page = entry.value;
+            return ListTile(
+              leading: Icon(page.icon, color: page.color),
+              title: Text(page.title),
+              selected: _selectedIndex == idx + 1,
+              onTap: () {
+                setState(() => _selectedIndex = idx + 1);
+                Navigator.pop(context);
+              },
+            );
+          }).toList(),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.feedback),
+            title: const Text('Feedbacks'),
+            selected: _selectedIndex == 9,
+            onTap: () {
+              setState(() => _selectedIndex = 9);
+              Navigator.pop(context);
+            },
           ),
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddPageDialog(),
-        backgroundColor: AppColors.primaryGreen,
-        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
 
-  Widget _buildWelcomeHeader() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Hi Admin!',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textDark,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Welcome back to your panel.',
-            style: TextStyle(
-              fontSize: 16,
-              color: AppColors.textMedium,
-            ),
-          ),
-          const SizedBox(height: 20),
-          const Text(
-            'Pages',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textDark,
-            ),
-          ),
-        ],
-      ),
-    );
+  Widget _buildBody() {
+    if (_selectedIndex == 0) {
+      return _buildDashboardView();
+    } else if (_selectedIndex >= 1 && _selectedIndex <= 8) {
+      return _buildPageEditorView(_pages[_selectedIndex - 1]);
+    } else {
+      return _buildFeedbacksView();
+    }
   }
 
-  Widget _buildPagesList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      itemCount: _pages.length,
-      itemBuilder: (context, index) {
-        final page = _pages[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: page.color.withOpacity(0.05),
-                border: Border.all(
-                  color: page.color.withOpacity(0.2),
-                  width: 1,
+  Widget _buildDashboardView() {
+    return StreamBuilder<List<UserFeedback>>(
+      stream: _getFeedbackStream(),
+      builder: (context, snapshot) {
+        int feedbackCount = 0;
+        if (snapshot.hasData) {
+          feedbackCount = snapshot.data!.length;
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Overview',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-              child: Row(
+              const SizedBox(height: 16),
+              Row(
                 children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: page.color,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      page.icon,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  
-                  const SizedBox(width: 16),
-                  
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          page.title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textDark,
-                          ),
+                    child: Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.pages,
+                              size: 48,
+                              color: AppColors.primaryGreen,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              '${_pages.length}',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Total Pages',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          page.description,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textMedium,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                  
-                  // Action buttons
-                  PopupMenuButton<String>(
-                    onSelected: (value) => _handlePageAction(value, index),
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Card(
+                      elevation: 4,
+                      child: Padding(
+                        padding: const EdgeInsets.all(20.0),
+                        child: Column(
                           children: [
-                            Icon(Icons.edit, size: 18),
-                            SizedBox(width: 8),
-                            Text('Edit'),
+                            Icon(
+                              Icons.feedback,
+                              size: 48,
+                              color: AppColors.accentBlue,
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              '$feedbackCount',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'User Feedbacks',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey,
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, size: 18, color: AppColors.errorRed),
-                            SizedBox(width: 8),
-                            Text('Delete', style: TextStyle(color: AppColors.errorRed)),
-                          ],
-                        ),
-                      ),
-                    ],
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey[300]!),
-                      ),
-                      child: const Icon(Icons.more_vert, size: 20),
                     ),
                   ),
                 ],
               ),
-            ),
+              const SizedBox(height: 24),
+              const Text(
+                'Quick Actions',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 16.0,
+                  mainAxisSpacing: 16.0,
+                  childAspectRatio: 1.2,
+                ),
+                itemCount: _pages.length,
+                itemBuilder: (context, index) {
+                  final page = _pages[index];
+                  return Card(
+                    elevation: 2.0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12.0),
+                    ),
+                    child: InkWell(
+                      onTap: () {
+                        setState(() => _selectedIndex = index + 1);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(page.icon, size: 36.0, color: page.color),
+                            const SizedBox(height: 8.0),
+                            Text(
+                              page.title,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14.0,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
           ),
         );
       },
     );
   }
 
-  void _handlePageAction(String action, int index) {
-    switch (action) {
-      case 'edit':
-        _showEditPageDialog(_pages[index], index);
-        break;
-      case 'delete':
-        _showDeleteConfirmDialog(index);
-        break;
-    }
-  }
-
-  void _showEditPageDialog(AdminPage page, int index) {
-    final titleController = TextEditingController(text: page.title);
-    final descriptionController = TextEditingController(text: page.description);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Page'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: 'Page Title',
-                border: OutlineInputBorder(),
-              ),
+  Widget _buildPageEditorView(AdminPage page) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(page.icon, size: 80, color: page.color),
+          const SizedBox(height: 16),
+          Text(
+            page.title,
+            style: const TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: descriptionController,
-              decoration: const InputDecoration(
-                labelText: 'Description',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 3,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
           ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+            child: Text(
+              page.description,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 16,
+                color: Colors.grey,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
           CustomButton(
-            text: 'Save',
+            text: 'Edit Content',
             onPressed: () {
-              setState(() {
-                _pages[index] = _pages[index].copyWith(
-                  title: titleController.text,
-                  description: descriptionController.text,
-                );
-              });
-              Navigator.pop(context);
-              _showSuccessSnackBar('Page updated successfully');
+              // TODO: Navigate to page editor
             },
           ),
         ],
@@ -308,155 +417,41 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  void _showDeleteConfirmDialog(int index) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Page'),
-        content: Text('Are you sure you want to delete "${_pages[index].title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          CustomButton(
-            text: 'Delete',
-            color: AppColors.errorRed,
-            onPressed: () {
-              setState(() {
-                _pages.removeAt(index);
-              });
-              Navigator.pop(context);
-              _showSuccessSnackBar('Page deleted successfully');
-            },
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildFeedbacksView() {
+    return StreamBuilder<List<UserFeedback>>(
+      stream: _getFeedbackStream(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        }
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No feedback yet.'));
+        }
 
-  void _showAddPageDialog() {
-    final titleController = TextEditingController();
-    final descriptionController = TextEditingController();
-    IconData selectedIcon = Icons.info;
-    Color selectedColor = AppColors.primaryGreen;
+        final feedbacks = snapshot.data!;
 
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add New Page'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Page Title',
-                  border: OutlineInputBorder(),
-                ),
+        return ListView.builder(
+          itemCount: feedbacks.length,
+          itemBuilder: (context, index) {
+            final feedback = feedbacks[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: ListTile(
+                title: Text('Rating: ${feedback.rating} stars'),
+                subtitle: Text(feedback.additionalFeedback),
+                trailing: Text(feedback.email),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: descriptionController,
-                decoration: const InputDecoration(
-                  labelText: 'Description',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const Text('Icon: '),
-                  IconButton(
-                    icon: Icon(selectedIcon, color: selectedColor),
-                    onPressed: () {
-                      // Simple icon selection
-                      final icons = [
-                        Icons.info,
-                        Icons.school,
-                        Icons.book,
-                        Icons.star,
-                        Icons.group,
-                        Icons.public,
-                      ];
-                      setDialogState(() {
-                        selectedIcon = icons[(icons.indexOf(selectedIcon) + 1) % icons.length];
-                      });
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            CustomButton(
-              text: 'Add',
-              onPressed: () {
-                if (titleController.text.isNotEmpty) {
-                  setState(() {
-                    _pages.add(AdminPage(
-                      title: titleController.text,
-                      description: descriptionController.text,
-                      icon: selectedIcon,
-                      color: selectedColor,
-                    ));
-                  });
-                  Navigator.pop(context);
-                  _showSuccessSnackBar('Page added successfully');
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showLogoutDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Logout'),
-        content: const Text('Are you sure you want to logout from admin panel?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          CustomButton(
-            text: 'Logout',
-            color: AppColors.errorRed,
-            onPressed: () {
-              Navigator.of(context).pushAndRemoveUntil(
-                MaterialPageRoute(builder: (context) => const MainDashboard()),
-                (route) => false,
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppColors.primaryGreen,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
+            );
+          },
+        );
+      },
     );
   }
 }
 
-// Data model for admin pages
 class AdminPage {
   final String title;
   final String description;
@@ -469,18 +464,4 @@ class AdminPage {
     required this.icon,
     required this.color,
   });
-
-  AdminPage copyWith({
-    String? title,
-    String? description,
-    IconData? icon,
-    Color? color,
-  }) {
-    return AdminPage(
-      title: title ?? this.title,
-      description: description ?? this.description,
-      icon: icon ?? this.icon,
-      color: color ?? this.color,
-    );
-  }
 }
