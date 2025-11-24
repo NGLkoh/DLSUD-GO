@@ -10,15 +10,18 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  firebase_core: ^3.1.1
+  firebase_core: ^2.24.2
   mapbox_maps_flutter: ^2.12.0
   geolocator: ^14.0.2
   http: ^0.13.6
   flutter_dotenv: ^5.1.0
   flutter_tts: ^4.0.2
   cupertino_icons: ^1.0.8
-  shared_preferences: ^2.5.3
   dialog_flowtter: ^0.3.3
+  firebase_auth: ^4.16.0
+  cloud_firestore: ^4.14.0
+  mobile_scanner: ^5.1.1
+  shared_preferences: ^2.2.2
 
 dev_dependencies:
   flutter_test:
@@ -30,6 +33,6 @@ flutter:
 
   uses-material-design: true
 
-  assets:
+  assets: 
     - .env
     - assets/dialogflow_key.json

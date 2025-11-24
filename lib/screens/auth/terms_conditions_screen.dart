@@ -1,11 +1,13 @@
 // lib/screens/auth/terms_conditions_screen.dart
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/theme/app_colors.dart';
 import '../../widgets/common/custom_button.dart';
 import '../dashboard/main_dashboard.dart';
 
 class TermsConditionsScreen extends StatefulWidget {
-  const TermsConditionsScreen({super.key});
+  final bool isFirstTime;
+  const TermsConditionsScreen({super.key, this.isFirstTime = false});
 
   @override
   State<TermsConditionsScreen> createState() => _TermsConditionsScreenState();
@@ -24,7 +26,7 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
 
   void _scrollListener() {
     // Check if user has scrolled to near the bottom (within 100 pixels)
-    if (_scrollController.offset >= 
+    if (_scrollController.offset >=
         _scrollController.position.maxScrollExtent - 100) {
       if (!_hasScrolledToBottom) {
         setState(() {
@@ -54,6 +56,10 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
     setState(() {
       _isAccepting = true;
     });
+
+    // Save acceptance state
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('terms_accepted', true);
 
     // Simulate processing delay
     await Future.delayed(const Duration(milliseconds: 800));
@@ -89,12 +95,12 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
           children: [
             // Header
             _buildHeader(),
-            
+
             // Scrollable terms content
             Expanded(
               child: _buildTermsContent(),
             ),
-            
+
             // Bottom action buttons
             _buildBottomActions(),
           ],
@@ -121,9 +127,9 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 8),
-          
+
           // Terms of Service title
           const Align(
             alignment: Alignment.centerLeft,
@@ -136,9 +142,9 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 8),
-          
+
           // Last updated
           Align(
             alignment: Alignment.centerLeft,
@@ -167,22 +173,22 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
               'Acceptance of Terms',
               'By using DLSU-D Go!, you acknowledge that you have read, understood, and agreed to be bound by these Terms and Conditions and the university\'s applicable data privacy and security policies.',
             ),
-            
+
             _buildSection(
               'User Access and Accounts',
               'General users may access core features (navigation, chatbot, static maps, FAQs) without registration.\n\nAuthorized administrative personnel must use secure login credentials to access the backend for content management.\n\nUsers are responsible for maintaining the confidentiality of any login information.',
             ),
-            
+
             _buildSection(
               'User Conduct',
               'You agree not to:\n• Use the app for unlawful purposes\n• Interfere with its operation or attempt to gain unauthorized access\n• Submit inappropriate content through queries through the chatbot',
             ),
-            
+
             _buildSection(
               'Consent and Acceptance',
               'By clicking "Accept and Continue", installing, or using the DLSU-D Go! mobile application, you acknowledge that you have read, understood, and agreed to be bound by this Privacy Statement and the Terms and Conditions of the application. You expressly consent to the collection, use, processing, storage, and disclosure of your data as described above, in accordance with applicable university policies and the provisions of the Data Privacy Act of 2012.\n\nIf you do not agree with any part of this Privacy Statement or the related Terms and Conditions, you should discontinue use of the application immediately and uninstall it from your device.',
             ),
-            
+
             // Add some extra space at the bottom for better scrolling experience
             const SizedBox(height: 100),
           ],
@@ -205,9 +211,9 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
               color: AppColors.textDark,
             ),
           ),
-          
+
           const SizedBox(height: 12),
-          
+
           Text(
             content,
             style: TextStyle(
@@ -254,7 +260,7 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
                 child: const Text('Scroll to Bottom'),
               ),
             ),
-          
+
           // Accept and Continue button
           CustomButton(
             text: 'Accept & Continue',
@@ -263,9 +269,9 @@ class _TermsConditionsScreenState extends State<TermsConditionsScreen> {
             width: double.infinity,
             height: 56,
           ),
-          
+
           const SizedBox(height: 12),
-          
+
           // Scroll to Top button (only show if scrolled down)
           if (_hasScrolledToBottom)
             OutlinedButton(
