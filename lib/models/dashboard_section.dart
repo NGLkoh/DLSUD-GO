@@ -33,12 +33,16 @@ class DashboardSection {
       iconName: data['icon_name'] ?? 'info',
       colorHex: data['color_hex'] ?? '#00563F',
       route: data['route'] ?? 'static_info',
-      subsections: (data['subsections'] is List)
-          ? data['subsections']
-          .where((item) => item is Map<String, dynamic>)
-          .map<Map<String, dynamic>>((item) => Map<String, dynamic>.from(item))
-          .toList()
-          : [],
+      subsections: (data['subsections'] as List<dynamic>? ?? [])
+          .map((s) {
+            final sub = Map<String, dynamic>.from(s as Map);
+            return {
+              'title': sub['title'] ?? '',
+              'descriptions': sub['descriptions'] ?? [],
+              'iconName': sub['icon_name'] ?? sub['iconName'] ?? 'info',
+            };
+          })
+          .toList(),
       isActive: data['is_active'] ?? true,
       order: data['order'] ?? 0,
     );
@@ -51,7 +55,13 @@ class DashboardSection {
       'icon_name': iconName,
       'color_hex': colorHex,
       'route': route,
-      'subsections': subsections,
+      'subsections': subsections.map((s) {
+        return {
+          'title': s['title'],
+          'descriptions': s['descriptions'],
+          'icon_name': s['iconName'],
+        };
+      }).toList(),
       'is_active': isActive,
       'order': order,
     };

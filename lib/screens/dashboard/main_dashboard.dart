@@ -6,6 +6,7 @@ import '../../models/dashboard_section.dart';
 import '../../widgets/common/custom_button.dart';
 import '../chatbot/chatbot_screen.dart';
 import '../map/navigation/map_navigation_screen.dart';
+import '../search/search_screen.dart';
 import '../settings/settings_screen.dart';
 import '../info/static_info_screen.dart';
 
@@ -205,7 +206,7 @@ class DashboardHomeTab extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const MapNavigationScreen(),
+                      builder: (context) => const SearchScreen(),
                     ),
                   );
                 },
@@ -307,6 +308,11 @@ class DashboardHomeTab extends StatelessWidget {
       Color color,
       VoidCallback onTap,
       ) {
+    // Limit description to 80 characters for uniform card height
+    final truncatedSubtitle = subtitle.length > 80
+        ? '${subtitle.substring(0, 80)}...'
+        : subtitle;
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -339,14 +345,18 @@ class DashboardHomeTab extends StatelessWidget {
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      subtitle,
+                      truncatedSubtitle,
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.9),
                         fontSize: 14,
                       ),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),

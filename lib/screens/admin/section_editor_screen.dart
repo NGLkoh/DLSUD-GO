@@ -20,9 +20,13 @@ class SectionEditorScreen extends StatefulWidget {
 class _SubsectionEditor {
   TextEditingController titleController;
   List<TextEditingController> descriptionControllers;
+  String selectedIcon;
 
-  _SubsectionEditor({String title = '', List<dynamic> descriptions = const []})
-      : titleController = TextEditingController(text: title),
+  _SubsectionEditor({
+    String title = '',
+    List<dynamic> descriptions = const [],
+    this.selectedIcon = 'info', // default subsection icon
+  })  : titleController = TextEditingController(text: title),
         descriptionControllers = descriptions
             .map((d) => TextEditingController(text: d.toString()))
             .toList();
@@ -88,10 +92,13 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
       _selectedColor = widget.section!.colorHex;
       _selectedRoute = widget.section!.route;
       _isActive = widget.section!.isActive;
-      _subsectionEditors = widget.section!.subsections
-          .map((s) => _SubsectionEditor(
-          title: s['title'] ?? '', descriptions: s['descriptions'] ?? []))
-          .toList();
+      _subsectionEditors = widget.section!.subsections.map((s) {
+        return _SubsectionEditor(
+          title: s['title'] ?? '',
+          descriptions: s['descriptions'] ?? [],
+          selectedIcon: s['iconName'] ?? 'info',
+        );
+      }).toList();
     } else {
       _subsectionEditors = [];
     }
@@ -149,6 +156,7 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
     final subsectionsData = _subsectionEditors.map((editor) {
       return {
         'title': editor.titleController.text,
+        'iconName': editor.selectedIcon,
         'descriptions': editor.descriptionControllers
             .map((c) => c.text)
             .where((d) => d.isNotEmpty)
@@ -187,7 +195,7 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Section saved successfully!')),
+          const SnackBar(content: Text('Section saved successfully!')),
         );
         Navigator.pop(context, true);
       }
@@ -240,7 +248,6 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
               validator: (value) =>
               value == null || value.isEmpty ? 'Please enter a title' : null,
             ),
-
             const SizedBox(height: 16),
 
             // DESCRIPTION
@@ -268,11 +275,11 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
               children: _availableIcons.map((iconData) {
                 final isSelected = _selectedIcon == iconData['name'];
                 return ChoiceChip(
-                  label: Icon(iconData['icon'], size: 24),
+                  label: Icon(iconData['icon'] as IconData, size: 24),
                   selected: isSelected,
                   onSelected: (selected) =>
-                      setState(() => _selectedIcon = iconData['name']),
-                  selectedColor: AppColors.primaryGreen.withOpacity(0.3),
+                      setState(() => _selectedIcon = iconData['name'] as String),
+                  selectedColor: AppColors.primaryGreen.withAlpha(77),
                 );
               }).toList(),
             ),
@@ -307,7 +314,7 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
                   selected: isSelected,
                   onSelected: (selected) =>
                       setState(() => _selectedColor = colorData['hex']!),
-                  selectedColor: color.withOpacity(0.3),
+                  selectedColor: color.withAlpha(77),
                 );
               }).toList(),
             ),
@@ -423,6 +430,29 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
                   ),
                 ],
               ),
+              const SizedBox(height: 12),
+              const Text('Subsection Icon',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: _availableIcons.map((iconData) {
+                  final isSelected = editor.selectedIcon == iconData['name'];
+                  return ChoiceChip(
+                    label: Icon(iconData['icon'] as IconData, size: 22),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      if (selected) {
+                        setState(() {
+                          editor.selectedIcon = iconData['name'] as String;
+                        });
+                      }
+                    },
+                    selectedColor: AppColors.primaryGreen.withAlpha(77),
+                  );
+                }).toList(),
+              ),
 
               const SizedBox(height: 12),
 
@@ -493,7 +523,7 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
             end: Alignment.bottomRight,
             colors: [
               color,
-              color.withOpacity(0.8),
+              color.withAlpha(204),
             ],
           ),
         ),
@@ -519,7 +549,7 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
                         ? 'Description'
                         : _descriptionController.text,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
+                      color: Colors.white.withAlpha(230),
                       fontSize: 14,
                     ),
                   ),
@@ -529,7 +559,7 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
+                color: Colors.white.withAlpha(51),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(

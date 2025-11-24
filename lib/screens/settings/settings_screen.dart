@@ -17,13 +17,126 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _darkModeEnabled = false;
   String _selectedLanguage = 'English';
   bool _highContrastMode = false;
+  double _textSize = 1.0;
+
+  // Language translations
+  Map<String, Map<String, String>> _translations = {
+    'English': {
+      'settings': 'Settings',
+      'general': 'General',
+      'general_info': 'General App Information',
+      'general_info_desc': 'App version, developer info',
+      'accessibility': 'Accessibility',
+      'accessibility_desc': 'Text size, contrast, voice settings',
+      'permissions': 'App Permissions',
+      'permissions_desc': 'Location, notifications',
+      'display': 'Display',
+      'appearance': 'Appearance',
+      'appearance_desc': 'Theme',
+      'preferences': 'Preferences',
+      'language': 'Language',
+      'privacy': 'Privacy & Security',
+      'privacy_desc': 'Data usage, location settings',
+      'support': 'Support',
+      'feedback': 'Feedback',
+      'feedback_desc': 'Send suggestions or report issues',
+      'administration': 'Administration',
+      'admin_login': 'Admin Login',
+      'admin_login_desc': 'Access administrative features',
+      'app_name': 'DLSU-D Go!',
+      'version': 'Version 1.0.0',
+      'developed_for': 'Developed for De La Salle University-Dasmariñas',
+      'close': 'Close',
+      'cancel': 'Cancel',
+      'save': 'Save',
+      'learn_more': 'Learn More',
+      'customize': 'Customize',
+      'app_info_title': 'App Information',
+      'app_info_content': 'A smart campus navigation app with AI-powered assistance.',
+      'accessibility_title': 'Accessibility Settings',
+      'high_contrast': 'High Contrast Mode',
+      'large_text': 'Large Text',
+      'large_text_desc': 'Use system font size settings',
+      'permissions_title': 'App Permissions',
+      'location_services': 'Location Services',
+      'location_desc': 'For navigation and maps',
+      'notifications': 'Notifications',
+      'notifications_desc': 'Campus alerts and updates',
+      'appearance_title': 'Appearance',
+      'light_theme': 'Light Theme',
+      'dark_theme': 'Dark Theme',
+      'language_title': 'Select Language',
+      'privacy_title': 'Privacy & Security',
+      'privacy_content': 'Your privacy is important to us. This app collects minimal data necessary for navigation and functionality. Location data is used only for map services and is not stored permanently.',
+      'text_size': 'Text Size',
+      'small': 'Small',
+      'medium': 'Medium',
+      'large': 'Large',
+    },
+    'Filipino': {
+      'settings': 'Mga Setting',
+      'general': 'Pangkalahatan',
+      'general_info': 'Pangkalahatang Impormasyon ng App',
+      'general_info_desc': 'Bersyon ng app, impormasyon ng developer',
+      'accessibility': 'Accessibility',
+      'accessibility_desc': 'Laki ng teksto, contrast, voice settings',
+      'permissions': 'Mga Pahintulot ng App',
+      'permissions_desc': 'Lokasyon, notipikasyon',
+      'display': 'Display',
+      'appearance': 'Hitsura',
+      'appearance_desc': 'Tema',
+      'preferences': 'Mga Kagustuhan',
+      'language': 'Wika',
+      'privacy': 'Privacy at Seguridad',
+      'privacy_desc': 'Paggamit ng data, settings ng lokasyon',
+      'support': 'Suporta',
+      'feedback': 'Feedback',
+      'feedback_desc': 'Magpadala ng mga mungkahi o iulat ang mga isyu',
+      'administration': 'Administrasyon',
+      'admin_login': 'Admin Login',
+      'admin_login_desc': 'I-access ang mga administrative features',
+      'app_name': 'DLSU-D Go!',
+      'version': 'Bersyon 1.0.0',
+      'developed_for': 'Ginawa para sa De La Salle University-Dasmariñas',
+      'close': 'Isara',
+      'cancel': 'Kanselahin',
+      'save': 'I-save',
+      'learn_more': 'Matuto Pa',
+      'customize': 'I-customize',
+      'app_info_title': 'Impormasyon ng App',
+      'app_info_content': 'Isang matalinong campus navigation app na may AI-powered na tulong.',
+      'accessibility_title': 'Mga Setting ng Accessibility',
+      'high_contrast': 'High Contrast Mode',
+      'large_text': 'Malaking Teksto',
+      'large_text_desc': 'Gamitin ang system font size settings',
+      'permissions_title': 'Mga Pahintulot ng App',
+      'location_services': 'Mga Serbisyo ng Lokasyon',
+      'location_desc': 'Para sa nabigasyon at mga mapa',
+      'notifications': 'Mga Notipikasyon',
+      'notifications_desc': 'Mga alerto at update sa campus',
+      'appearance_title': 'Hitsura',
+      'light_theme': 'Light Theme',
+      'dark_theme': 'Dark Theme',
+      'language_title': 'Pumili ng Wika',
+      'privacy_title': 'Privacy at Seguridad',
+      'privacy_content': 'Mahalaga sa amin ang iyong privacy. Ang app na ito ay nangongolekta ng minimal na data na kailangan para sa nabigasyon at functionality. Ang data ng lokasyon ay ginagamit lamang para sa mga serbisyo ng mapa at hindi naka-imbak nang permanente.',
+      'text_size': 'Laki ng Teksto',
+      'small': 'Maliit',
+      'medium': 'Katamtaman',
+      'large': 'Malaki',
+    },
+  };
+
+  String _t(String key) {
+    return _translations[_selectedLanguage]?[key] ?? key;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(_t('settings')),
         backgroundColor: AppColors.backgroundColor,
         elevation: 1,
         centerTitle: false,
@@ -35,78 +148,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // General App Information
+          // General Section
           _buildSettingsSection(
-            'General',
+            _t('general'),
             [
               _buildSettingsTile(
-                'General App Information',
-                'App version, developer info',
+                _t('general_info'),
+                _t('general_info_desc'),
                 Icons.info_outline,
-                () => _showAppInfoDialog(context),
+                    () => _showAppInfoDialog(context),
               ),
               _buildSettingsTile(
-                'Accessibility',
-                'Text size, contrast, voice settings',
+                _t('accessibility'),
+                _t('accessibility_desc'),
                 Icons.accessibility,
-                () => _showAccessibilityDialog(context),
+                    () => _showAccessibilityDialog(context),
               ),
               _buildSettingsTile(
-                'App Permissions',
-                'Location, notifications',
+                _t('permissions'),
+                _t('permissions_desc'),
                 Icons.security,
-                () => _showPermissionsDialog(context),
+                    () => _showPermissionsDialog(context),
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Display Settings
           _buildSettingsSection(
-            'Display',
+            _t('display'),
             [
               _buildSettingsTile(
-                'Appearance',
-                'Theme',
+                _t('appearance'),
+                _darkModeEnabled ? _t('dark_theme') : _t('light_theme'),
                 Icons.palette,
-                () => _showAppearanceDialog(context),
+                    () => _showAppearanceDialog(context),
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Language & Preferences
           _buildSettingsSection(
-            'Preferences',
+            _t('preferences'),
             [
               _buildSettingsTile(
-                'Language',
+                _t('language'),
                 _selectedLanguage,
                 Icons.language,
-                () => _showLanguageDialog(context),
+                    () => _showLanguageDialog(context),
               ),
               _buildSettingsTile(
-                'Privacy & Security',
-                'Data usage, location settings',
+                _t('privacy'),
+                _t('privacy_desc'),
                 Icons.privacy_tip,
-                () => _showPrivacyDialog(context),
+                    () => _showPrivacyDialog(context),
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Feedback & Support
           _buildSettingsSection(
-            'Support',
+            _t('support'),
             [
               _buildSettingsTile(
-                'Feedback',
-                'Send suggestions or report issues',
+                _t('feedback'),
+                _t('feedback_desc'),
                 Icons.feedback,
-                () {
+                    () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const FeedbackScreen()),
@@ -115,18 +228,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Admin Section
           _buildSettingsSection(
-            'Administration',
+            _t('administration'),
             [
               _buildSettingsTile(
-                'Admin Login',
-                'Access administrative features',
+                _t('admin_login'),
+                _t('admin_login_desc'),
                 Icons.admin_panel_settings,
-                () {
+                    () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
@@ -136,9 +249,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
-          
+
           const SizedBox(height: 40),
-          
+
           // App version footer
           _buildAppVersionFooter(),
         ],
@@ -171,12 +284,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSettingsTile(
-    String title,
-    String subtitle,
-    IconData icon,
-    VoidCallback onTap, {
-    Color? color,
-  }) {
+      String title,
+      String subtitle,
+      IconData icon,
+      VoidCallback onTap, {
+        Color? color,
+      }) {
     return ListTile(
       leading: Icon(
         icon,
@@ -201,43 +314,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildSwitchTile(
-    String title,
-    String subtitle,
-    IconData icon,
-    bool value,
-    Function(bool) onChanged,
-  ) {
-    return ListTile(
-      leading: Icon(icon, color: AppColors.primaryGreen),
-      title: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(
-          fontSize: 14,
-          color: AppColors.textMedium,
-        ),
-      ),
-      trailing: Switch(
-        value: value,
-        onChanged: onChanged,
-        activeColor: AppColors.primaryGreen,
-      ),
-    );
-  }
-
   Widget _buildAppVersionFooter() {
     return Center(
       child: Column(
         children: [
           Text(
-            'DLSU-D Go!',
+            _t('app_name'),
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
@@ -246,7 +328,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Version 1.0.0',
+            _t('version'),
             style: TextStyle(
               fontSize: 14,
               color: AppColors.textLight,
@@ -254,7 +336,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Developed for De La Salle University-Dasmariñas',
+            _t('developed_for'),
             style: TextStyle(
               fontSize: 12,
               color: AppColors.textLight,
@@ -271,22 +353,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('App Information'),
-        content: const Column(
+        title: Text(_t('app_info_title')),
+        content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('DLSU-D Go! v1.0.0'),
-            SizedBox(height: 8),
-            Text('A smart campus navigation app with AI-powered assistance.'),
-            SizedBox(height: 16),
-            Text('Developed for:\nDe La Salle University-Dasmariñas'),
+            Text('${_t('app_name')} ${_t('version')}'),
+            const SizedBox(height: 8),
+            Text(_t('app_info_content')),
+            const SizedBox(height: 16),
+            Text('${_t('developed_for')}\nDe La Salle University-Dasmariñas'),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(_t('close')),
           ),
         ],
       ),
@@ -296,34 +378,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showAccessibilityDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Accessibility Settings'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SwitchListTile(
-              title: const Text('High Contrast Mode'),
-              value: _highContrastMode,
-              onChanged: (value) {
-                setState(() {
-                  _highContrastMode = value;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            const ListTile(
-              title: Text('Large Text'),
-              subtitle: Text('Use system font size settings'),
-              trailing: Icon(Icons.font_download),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(_t('accessibility_title')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwitchListTile(
+                title: Text(_t('high_contrast')),
+                value: _highContrastMode,
+                onChanged: (value) {
+                  setState(() {
+                    _highContrastMode = value;
+                  });
+                  setDialogState(() {
+                    _highContrastMode = value;
+                  });
+                },
+                activeColor: AppColors.primaryGreen,
+              ),
+              const Divider(),
+              ListTile(
+                title: Text(_t('text_size')),
+                subtitle: Slider(
+                  value: _textSize,
+                  min: 0.8,
+                  max: 1.5,
+                  divisions: 7,
+                  label: _textSize == 0.8
+                      ? _t('small')
+                      : _textSize == 1.0
+                      ? _t('medium')
+                      : _t('large'),
+                  activeColor: AppColors.primaryGreen,
+                  onChanged: (value) {
+                    setState(() {
+                      _textSize = value;
+                    });
+                    setDialogState(() {
+                      _textSize = value;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(_t('close')),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }
@@ -331,39 +437,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showPermissionsDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('App Permissions'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SwitchListTile(
-              title: const Text('Location Services'),
-              subtitle: const Text('For navigation and maps'),
-              value: _locationServicesEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _locationServicesEnabled = value;
-                });
-              },
-            ),
-            SwitchListTile(
-              title: const Text('Notifications'),
-              subtitle: const Text('Campus alerts and updates'),
-              value: _notificationsEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _notificationsEnabled = value;
-                });
-              },
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(_t('permissions_title')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SwitchListTile(
+                title: Text(_t('location_services')),
+                subtitle: Text(_t('location_desc')),
+                value: _locationServicesEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _locationServicesEnabled = value;
+                  });
+                  setDialogState(() {
+                    _locationServicesEnabled = value;
+                  });
+                },
+                activeColor: AppColors.primaryGreen,
+              ),
+              SwitchListTile(
+                title: Text(_t('notifications')),
+                subtitle: Text(_t('notifications_desc')),
+                value: _notificationsEnabled,
+                onChanged: (value) {
+                  setState(() {
+                    _notificationsEnabled = value;
+                  });
+                  setDialogState(() {
+                    _notificationsEnabled = value;
+                  });
+                },
+                activeColor: AppColors.primaryGreen,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(_t('close')),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }
@@ -371,41 +487,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showAppearanceDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Appearance'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<bool>(
-              title: const Text('Light Theme'),
-              value: false,
-              groupValue: _darkModeEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _darkModeEnabled = value!;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            RadioListTile<bool>(
-              title: const Text('Dark Theme'),
-              value: true,
-              groupValue: _darkModeEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _darkModeEnabled = value!;
-                });
-                Navigator.pop(context);
-              },
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(_t('appearance_title')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<bool>(
+                title: Text(_t('light_theme')),
+                value: false,
+                groupValue: _darkModeEnabled,
+                activeColor: AppColors.primaryGreen,
+                onChanged: (value) {
+                  setState(() {
+                    _darkModeEnabled = value!;
+                  });
+                  setDialogState(() {});
+                  Navigator.pop(context);
+                  // Show snackbar
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${_t('light_theme')} ${_t('save').toLowerCase()}d'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+              RadioListTile<bool>(
+                title: Text(_t('dark_theme')),
+                value: true,
+                groupValue: _darkModeEnabled,
+                activeColor: AppColors.primaryGreen,
+                onChanged: (value) {
+                  setState(() {
+                    _darkModeEnabled = value!;
+                  });
+                  setDialogState(() {});
+                  Navigator.pop(context);
+                  // Show snackbar
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('${_t('dark_theme')} ${_t('save').toLowerCase()}d'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(_t('cancel')),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
       ),
     );
   }
@@ -413,41 +549,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showLanguageDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Language'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            RadioListTile<String>(
-              title: const Text('English'),
-              value: 'English',
-              groupValue: _selectedLanguage,
-              onChanged: (value) {
-                setState(() {
-                  _selectedLanguage = value!;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            RadioListTile<String>(
-              title: const Text('Filipino'),
-              value: 'Filipino',
-              groupValue: _selectedLanguage,
-              onChanged: (value) {
-                setState(() {
-                  _selectedLanguage = value!;
-                });
-                Navigator.pop(context);
-              },
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(_t('language_title')),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<String>(
+                title: const Text('English'),
+                value: 'English',
+                groupValue: _selectedLanguage,
+                activeColor: AppColors.primaryGreen,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedLanguage = value!;
+                  });
+                  Navigator.pop(context);
+                  // Show confirmation snackbar
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Language changed to English'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+              RadioListTile<String>(
+                title: const Text('Filipino'),
+                value: 'Filipino',
+                groupValue: _selectedLanguage,
+                activeColor: AppColors.primaryGreen,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedLanguage = value!;
+                  });
+                  Navigator.pop(context);
+                  // Show confirmation snackbar
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Pinalitan ang wika sa Filipino'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(_t('cancel')),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ],
       ),
     );
   }
@@ -456,48 +610,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Privacy & Security'),
-        content: const Text(
-          'Your privacy is important to us. This app collects minimal data necessary for navigation and functionality. Location data is used only for map services and is not stored permanently.',
-        ),
+        title: Text(_t('privacy_title')),
+        content: Text(_t('privacy_content')),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Learn More'),
+            onPressed: () {
+              Navigator.pop(context);
+              // In a real app, this would open a detailed privacy policy
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(_t('learn_more')),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            child: Text(_t('learn_more')),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showPreferencesDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Preferences'),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Default Start Location: Gate 1'),
-            SizedBox(height: 8),
-            Text('Preferred Route Type: Walking'),
-            SizedBox(height: 8),
-            Text('Map Style: Standard'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Customize'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text(_t('close')),
           ),
         ],
       ),
