@@ -47,3 +47,4 @@ app.*.map.json
 # Ignore secrets
 assets/dialogflow_key.json
 .env
+/android/key.properties
