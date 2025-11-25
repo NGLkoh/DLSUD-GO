@@ -36,7 +36,7 @@ dependencies:
   image: ^4.0.17
   firebase_database: ^10.5.7
   google_mlkit_translation: ^0.13.0
-
+  desktop_drop: ^0.2.0
 
 dev_dependencies:
   flutter_test:

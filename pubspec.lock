@@ -201,6 +201,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.1"
+  desktop_drop:
+    dependency: "direct main"
+    description:
+      name: desktop_drop
+      sha256: "893178191b1ecc6e39f90d0b4f338c80254b28ac005ccb9eb5acd4616f835daf"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.2.0"
   dialog_flowtter:
     dependency: "direct main"
     description:
