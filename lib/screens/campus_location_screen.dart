@@ -22,7 +22,7 @@ class _CampusLocationEditorScreenState extends State<CampusLocationEditorScreen>
   final _longitudeController = TextEditingController();
   final _panoramaController = TextEditingController();
   String _selectedIconName = 'info';
-  List<File> _newImages = [];
+  final List<File> _newImages = [];
   List<String> _existingImages = [];
 
   @override
@@ -145,7 +145,7 @@ class _CampusLocationEditorScreenState extends State<CampusLocationEditorScreen>
               const SizedBox(height: 12),
               // Icon selector
               DropdownButtonFormField<String>(
-                value: _selectedIconName,
+                initialValue: _selectedIconName,
                 items: const [
                   DropdownMenuItem(value: 'school', child: Text('School')),
                   DropdownMenuItem(value: 'map', child: Text('Map')),

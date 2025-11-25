@@ -152,7 +152,6 @@ class AppTheme {
       colorScheme: const ColorScheme.dark(
         primary: Color(0xFF66BB6A), // A lighter green for dark mode
         secondary: Color(0xFF81C784),
-        background: Color(0xFF121212),
         surface: Color(0xFF1E1E1E),
       ),
       appBarTheme: const AppBarTheme(

@@ -6,7 +6,6 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../core/theme/app_colors.dart';
 import '../../widgets/common/custom_button.dart';
 
 class CampusInfoEditorScreen extends StatefulWidget {

@@ -780,7 +780,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
                     ],
                   ),
                 ))
-                .toList(),
+                ,
           ],
         ),
       ),

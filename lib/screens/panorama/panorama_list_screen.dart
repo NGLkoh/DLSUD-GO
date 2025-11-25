@@ -8,7 +8,7 @@ import 'panorama_view_screen.dart';
 import 'package:dlsud_go/models/campus_location.dart';
 
 class PanoramaListScreen extends StatefulWidget {
-  const PanoramaListScreen({Key? key}) : super(key: key);
+  const PanoramaListScreen({super.key});
 
   @override
   State<PanoramaListScreen> createState() => _PanoramaListScreenState();
@@ -177,7 +177,7 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
       setState(() => _uploadStatus = 'Uploading panorama...');
 
       // Upload stitched panorama as JPEG
-      final fileName = "panorama_stitched_${collectionId}.jpg";
+      final fileName = "panorama_stitched_$collectionId.jpg";
       await supabase.storage.from("panoramas").upload(
         fileName,
         stitchedFile,

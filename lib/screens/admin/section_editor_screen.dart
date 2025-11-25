@@ -323,7 +323,7 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
 
             // ROUTE SELECTOR
             DropdownButtonFormField<String>(
-              value: _selectedRoute,
+              initialValue: _selectedRoute,
               decoration: const InputDecoration(
                 labelText: 'Navigation Route *',
                 border: OutlineInputBorder(),
@@ -485,7 +485,7 @@ class _SectionEditorScreenState extends State<SectionEditorScreen> {
                     ],
                   ),
                 );
-              }).toList(),
+              }),
 
               const SizedBox(height: 8),
 
