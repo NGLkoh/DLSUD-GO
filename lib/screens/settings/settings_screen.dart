@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import '../../services/settings_service.dart';
 import '../auth/admin_login_screen.dart';
 import '../feedback/feedback_screen.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:dlsud_go/core/theme/app_colors.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -15,70 +17,68 @@ class SettingsScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        // Translated App Bar Title
+        title: Text('settings.title'.tr()),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           _buildSettingsSection(
             context,
-            'General',
+            'settings.general'.tr(), // Translated
             [
               _buildSettingsTile(
                 context,
-                'App Information',
+                'settings.app_info'.tr(), // Translated
                 'Version, developer info',
                 Icons.info_outline,
-                () => _showAppInfoDialog(context),
+                    () => _showAppInfoDialog(context),
               ),
               _buildSettingsTile(
                 context,
-                'Accessibility',
+                'settings.accessibility'.tr(), // Translated
                 'Text size, contrast',
                 Icons.accessibility,
-                () => _showAccessibilityDialog(context),
+                    () => _showAccessibilityDialog(context),
               ),
             ],
           ),
           const SizedBox(height: 24),
           _buildSettingsSection(
             context,
-            'Theme',
+            'settings.theme'.tr(), // Translated
             [
               _buildSettingsTile(
                 context,
-                'Theme',
+                'settings.theme'.tr(), // Translated
                 settings.themeMode.toString().split('.').last,
                 Icons.palette,
-                () => _showThemeDialog(context, settings),
+                    () => _showThemeDialog(context, settings),
               ),
             ],
           ),
           const SizedBox(height: 24),
+          // --- LANGUAGE SECTION ---
           _buildSettingsSection(
             context,
-            'Language',
+            'settings.language'.tr(), // Translated
             [
-              _buildSettingsTile(
-                context,
-                'Language',
-                settings.locale.languageCode == 'en' ? 'English' : 'Filipino',
-                Icons.language,
-                () => _showLanguageDialog(context, settings),
-              ),
+              // 2. REPLACED old _buildSettingsTile with the custom LanguageSettingsTile
+              const LanguageSettingsTile(),
             ],
           ),
+          // --- END LANGUAGE SECTION ---
           const SizedBox(height: 24),
           _buildSettingsSection(
             context,
-            'Support',
+            'settings.support'.tr(), // Translated
             [
               _buildSettingsTile(
                 context,
-                'Feedback',
+                'settings.feedback'.tr(), // Translated
                 'Send suggestions or report issues',
                 Icons.feedback,
-                () {
+                    () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const FeedbackScreen()),
@@ -90,14 +90,14 @@ class SettingsScreen extends StatelessWidget {
           const SizedBox(height: 24),
           _buildSettingsSection(
             context,
-            'Administration',
+            'settings.admin'.tr(), // Translated
             [
               _buildSettingsTile(
                 context,
-                'Admin Login',
+                'settings.admin_login'.tr(), // Translated
                 'Access administrative features',
                 Icons.admin_panel_settings,
-                () {
+                    () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(builder: (context) => const AdminLoginScreen()),
@@ -112,6 +112,8 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  // --- Utility methods remain unchanged ---
+
   Widget _buildSettingsSection(BuildContext context, String title, List<Widget> children) {
     final appColors = Theme.of(context).extension<AppColorsExtension>()!;
     return Column(
@@ -120,6 +122,7 @@ class SettingsScreen extends StatelessWidget {
         Padding(
           padding: const EdgeInsets.only(left: 16, bottom: 12),
           child: Text(
+            // Use provided title (which is now translated via .tr() above)
             title,
             style: TextStyle(
               fontSize: 14,
@@ -138,13 +141,13 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildSettingsTile(
-    BuildContext context,
-    String title,
-    String subtitle,
-    IconData icon,
-    VoidCallback onTap, {
-    Color? color,
-  }) {
+      BuildContext context,
+      String title,
+      String subtitle,
+      IconData icon,
+      VoidCallback onTap, {
+        Color? color,
+      }) {
     final appColors = Theme.of(context).extension<AppColorsExtension>()!;
     return ListTile(
       leading: Icon(
@@ -170,11 +173,13 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  // --- Dialogs (Translate titles/content here) ---
+
   void _showAppInfoDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('App Information'),
+        title: Text('settings.app_info'.tr()),
         content: const Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,7 +194,7 @@ class SettingsScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text('Close'.tr()),
           ),
         ],
       ),
@@ -200,12 +205,12 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Accessibility Settings'),
-        content: const Text('High contrast and text size settings coming soon!'),
+        title: Text('settings.accessibility'.tr()),
+        content: Text('High contrast and text size settings coming soon!'.tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: Text('Close'.tr()),
           ),
         ],
       ),
@@ -216,12 +221,12 @@ class SettingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Theme'),
+        title: Text('settings.theme'.tr()),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             RadioListTile<ThemeMode>(
-              title: const Text('Light'),
+              title: Text('Light'.tr()),
               value: ThemeMode.light,
               groupValue: settings.themeMode,
               onChanged: (value) {
@@ -230,7 +235,7 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             RadioListTile<ThemeMode>(
-              title: const Text('Dark'),
+              title: Text('Dark'.tr()),
               value: ThemeMode.dark,
               groupValue: settings.themeMode,
               onChanged: (value) {
@@ -239,7 +244,7 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             RadioListTile<ThemeMode>(
-              title: const Text('System'),
+              title: Text('System'.tr()),
               value: ThemeMode.system,
               groupValue: settings.themeMode,
               onChanged: (value) {
@@ -253,30 +258,59 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  void _showLanguageDialog(BuildContext context, SettingsService settings) {
+// 3. REMOVE the old _showLanguageDialog as it's no longer needed.
+// The logic is now in the LanguageSettingsTile widget.
+}
+
+// 3. ADD THE NEW WIDGET HERE
+class LanguageSettingsTile extends StatelessWidget {
+  const LanguageSettingsTile({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // We recreate the structure of a settings tile, but rely on easy_localization
+    return ListTile(
+      leading: const Icon(Icons.language),
+      title: Text('settings.language'.tr()),
+      subtitle: Text(
+        // Display the currently selected language
+        context.locale.languageCode == 'en' ? 'English' : 'Tagalog',
+      ),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+      onTap: () => _showLanguageDialog(context),
+    );
+  }
+
+  void _showLanguageDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Language'),
+        title: Text('settings.language'.tr()),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             RadioListTile<Locale>(
               title: const Text('English'),
-              value: const Locale('en'),
-              groupValue: settings.locale,
-              onChanged: (value) {
-                settings.updateLanguage(value!);
-                Navigator.pop(context);
+              value: const Locale('en', 'US'),
+              groupValue: context.locale,
+              onChanged: (Locale? val) {
+                if (val != null) {
+                  // This one line updates the app and persists the locale
+                  context.setLocale(val);
+                  Navigator.pop(context);
+                }
               },
             ),
             RadioListTile<Locale>(
-              title: const Text('Filipino'),
-              value: const Locale('fil'),
-              groupValue: settings.locale,
-              onChanged: (value) {
-                settings.updateLanguage(value!);
-                Navigator.pop(context);
+              title: const Text('Tagalog'),
+              value: const Locale('tl', 'PH'),
+              groupValue: context.locale,
+              onChanged: (Locale? val) {
+                if (val != null) {
+                  // This one line updates the app and persists the locale
+                  context.setLocale(val);
+                  Navigator.pop(context);
+                }
               },
             ),
           ],

@@ -1,0 +1,46 @@
+{
+  "app_title": "DLSU-D Go",
+  "settings": {
+    "title": "Mga Setting",
+    "general": "Pangkalahatan",
+    "app_info": "Impormasyon ng App",
+    "accessibility": "Accessibility",
+    "theme": "Tema",
+    "language": "Wika",
+    "support": "Suporta",
+    "feedback": "Puna",
+    "admin": "Administrasyon",
+    "admin_login": "Admin Login",
+    "logout": "Mag-logout"
+  },
+  "dashboard": {
+    "welcome": "Maligayang pagbabalik,",
+    "patriot": "Patriot!",
+    "explore": "Tuklasin",
+    "maps": "Mapa",
+    "chatbot": "Chatbot",
+    "quick_access": "Mabilisang Access",
+    "chat_assistant": "Chat Assistant",
+    "error": "May Error: {}",
+    "no_sections": "Walang seksyon na magagamit",
+    "learn_more": "Alamin Pa"
+  },
+  "sections": {
+    "admissions_title": "Admissions",
+    "admissions_desc": "Maligayang pagdating sa De La Salle University-Dasmariñas — isang institusyong Lasalyano na pinagsasama ang kahusayan sa akademya at paghubog ng karakter.",
+    "programs_title": "Mga Programa",
+    "programs_desc": "Nag-aalok ang De La Salle University-Dasmariñas ng mga programang akademiko na dinisenyo upang tumugma sa mga pamantayang pandaigdigan.",
+    "maps_title": "Mga Mapa",
+    "maps_desc": "Mag-navigate sa paligid ng kampus gamit ang interactive na mapa upang mahanap ang mga gusali at opisina.",
+    "research_title": "Pananaliksik",
+    "research_desc": "Ang De La Salle University-Dasmariñas (DLSU-D) ay nagsusulong ng matibay na kultura ng pananaliksik at pag-unlad.",
+    "global_title": "Pandaigdigan",
+    "global_desc": "Makilahok sa mga internasyonal na ugnayan at mga programa para sa palitan ng mag-aaral.",
+    "global_title": "Buhay sa Campus"
+  },
+  "campus_info": {
+    "title": "Tungkol sa DLSU-D",
+    "button": "Tuklasin Pa",
+    "about_description": "Ang De La Salle University-Dasmariñas (DLSU-D) ay isang pribadong pamantasang Katoliko sa Cavite na itinatag ng De La Salle Brothers. Itinatag noong 1977, ito ay isa sa pinakamalaking institusyong Lasalyano sa Pilipinas."
+  }
+}

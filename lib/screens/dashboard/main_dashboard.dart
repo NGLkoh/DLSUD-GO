@@ -1,14 +1,14 @@
-// lib/screens/dashboard/main_dashboard.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:dlsud_go/core/theme/app_theme.dart';
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../../models/dashboard_section.dart';
 import '../../widgets/common/custom_button.dart';
 import '../chatbot/chatbot_screen.dart';
 import '../map/navigation/map_navigation_screen.dart';
+import '../search/search_screen.dart';
 import '../settings/settings_screen.dart';
 import '../info/static_info_screen.dart';
-// Add this import
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -21,7 +21,6 @@ class _MainDashboardState extends State<MainDashboard> {
   int _currentIndex = 0;
   final PageController _pageController = PageController();
 
-  // Build pages list in the build method so we have access to instance methods
   List<Widget> get _pages => [
     const DashboardHomeTab(),
     const MapNavigationScreen(),
@@ -86,18 +85,18 @@ class _MainDashboardState extends State<MainDashboard> {
         unselectedItemColor: appColors.textLight,
         backgroundColor: appColors.cardBackground ?? Theme.of(context).cardColor,
         elevation: 0,
-        items: const [
+        items: [
           BottomNavigationBarItem(
-            icon: Icon(Icons.explore),
-            label: 'Explore',
+            icon: const Icon(Icons.explore),
+            label: 'dashboard.explore'.tr(),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.map),
-            label: 'Maps',
+            icon: const Icon(Icons.map),
+            label: 'dashboard.maps'.tr(),
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat),
-            label: 'Chatbot',
+            icon: const Icon(Icons.chat),
+            label: 'dashboard.chatbot'.tr(),
           ),
         ],
       ),
@@ -107,6 +106,29 @@ class _MainDashboardState extends State<MainDashboard> {
 
 class DashboardHomeTab extends StatelessWidget {
   const DashboardHomeTab({super.key});
+
+  // --- HELPER: MAP DB TITLES TO TRANSLATION KEYS ---
+  String _getTranslatedTitle(String dbTitle) {
+    final key = dbTitle.toLowerCase().trim();
+    if (key.contains('admission')) return 'sections.admissions_title'.tr();
+    if (key.contains('program')) return 'sections.programs_title'.tr();
+    if (key.contains('map')) return 'sections.maps_title'.tr();
+    if (key.contains('research')) return 'sections.research_title'.tr();
+    if (key.contains('global')) return 'sections.global_title'.tr();
+    // Fallback: return the original DB text if no translation found
+    return dbTitle;
+  }
+
+  String _getTranslatedDescription(String dbTitle, String originalDesc) {
+    final key = dbTitle.toLowerCase().trim();
+    if (key.contains('admission')) return 'sections.admissions_desc'.tr();
+    if (key.contains('program')) return 'sections.programs_desc'.tr();
+    if (key.contains('map')) return 'sections.maps_desc'.tr();
+    if (key.contains('research')) return 'sections.research_desc'.tr();
+    if (key.contains('global')) return 'sections.global_desc'.tr();
+    return originalDesc;
+  }
+  // --------------------------------------------------
 
   Stream<List<DashboardSection>> _getSectionsStream() {
     return FirebaseFirestore.instance
@@ -189,17 +211,17 @@ class DashboardHomeTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.end,
-                      children: const [
+                      children: [
                         Text(
-                          'Welcome back,',
-                          style: TextStyle(
+                          'dashboard.welcome'.tr(),
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                           ),
                         ),
                         Text(
-                          'Patriot!',
-                          style: TextStyle(
+                          'dashboard.patriot'.tr(),
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
@@ -229,7 +251,7 @@ class DashboardHomeTab extends StatelessWidget {
                     if (snapshot.hasError) {
                       return Center(
                         child: Text(
-                          'Error: ${snapshot.error}',
+                          'dashboard.error'.tr(args: [snapshot.error.toString()]),
                           style: TextStyle(color: appColors.textDark),
                         ),
                       );
@@ -237,7 +259,7 @@ class DashboardHomeTab extends StatelessWidget {
                     if (!snapshot.hasData || snapshot.data!.isEmpty) {
                       return Center(
                         child: Text(
-                          'No sections available',
+                          'dashboard.no_sections'.tr(),
                           style: TextStyle(color: appColors.textDark),
                         ),
                       );
@@ -266,6 +288,7 @@ class DashboardHomeTab extends StatelessWidget {
                     return _buildCampusInfoSection(context, snapshot.data!);
                   },
                 ),
+                const SizedBox(height: 32),
               ]),
             ),
           ),
@@ -277,12 +300,16 @@ class DashboardHomeTab extends StatelessWidget {
   Widget _buildMainServiceCards(BuildContext context, List<DashboardSection> sections) {
     return Column(
       children: sections.map((section) {
+        // USE HELPERS TO GET TRANSLATED TEXT
+        final displayTitle = _getTranslatedTitle(section.title);
+        final displayDesc = _getTranslatedDescription(section.title, section.description);
+
         return Padding(
           padding: const EdgeInsets.only(bottom: 16),
           child: _buildServiceCard(
             context,
-            section.title,
-            section.description,
+            displayTitle, // Use translated title
+            displayDesc,  // Use translated description
             _getIconFromString(section.iconName),
             _getColorFromHex(context, section.colorHex),
                 () {
@@ -296,7 +323,7 @@ class DashboardHomeTab extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (context) => StaticInfoScreen(
-                      title: section.title,
+                      title: displayTitle, // Pass translated title
                       sections: section.subsections.map((s) {
                         return {
                           'title': s['title'] ?? '',
@@ -324,7 +351,7 @@ class DashboardHomeTab extends StatelessWidget {
       Color color,
       VoidCallback onTap,
       ) {
-    // Limit description to 80 characters for uniform card height
+
     final truncatedSubtitle = subtitle.length > 80
         ? '${subtitle.substring(0, 80)}...'
         : subtitle;
@@ -409,7 +436,7 @@ class DashboardHomeTab extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Quick Access',
+          'dashboard.quick_access'.tr(),
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
@@ -422,7 +449,7 @@ class DashboardHomeTab extends StatelessWidget {
             Expanded(
               child: _buildQuickAccessCard(
                 context,
-                'Chat Assistant',
+                'dashboard.chat_assistant'.tr(),
                 Icons.chat,
                 appColors.primaryGreen ?? const Color(0xFF2D6A4F),
                     () {
@@ -437,7 +464,7 @@ class DashboardHomeTab extends StatelessWidget {
             Expanded(
               child: _buildQuickAccessCard(
                 context,
-                'Settings',
+                'settings.title'.tr(),
                 Icons.settings,
                 appColors.textMedium ?? Colors.grey,
                     () {
@@ -489,12 +516,28 @@ class DashboardHomeTab extends StatelessWidget {
     );
   }
 
+  // UPDATED CAMPUS INFO SECTION
   Widget _buildCampusInfoSection(BuildContext context, Map<String, dynamic> data) {
     final appColors = Theme.of(context).extension<AppColorsExtension>()!;
-    final title = data['title'] ?? 'De La Salle University-Dasmariñas';
-    final subtitle = data['subtitle'] ?? 'Your gateway to campus navigation and services';
-    final description = data['description'] ?? '';
-    final buttonText = data['button_text'] ?? 'Learn More';
+
+    // 1. Translate Title and Button using keys
+    final title = 'campus_info.title'.tr();
+    final buttonText = 'campus_info.button'.tr();
+
+    // 2. Translate Subtitle
+    // We use the key directly for the subtitle to ensure it translates
+    final subtitle = 'campus_info.subtitle'.tr();
+
+    // 3. Handle Description Translation (The long text)
+    // We grab the raw text from the database
+    String rawDescription = data['description'] ?? '';
+    String description = rawDescription;
+
+    // LOGIC: If the text from DB looks like the "About" description (starts with "De La Salle"),
+    // we force it to use our translated key instead of the raw English text.
+    if (rawDescription.trim().startsWith("De La Salle")) {
+      description = 'campus_info.about_description'.tr();
+    }
 
     final buttonSections = List<Map<String, dynamic>>.from(
         data['button_sections'] ?? []
@@ -544,6 +587,7 @@ class DashboardHomeTab extends StatelessWidget {
               ],
             ),
 
+            // Display the description (which is now translated if it matched)
             if (description.isNotEmpty) ...[
               const SizedBox(height: 20),
               Text(

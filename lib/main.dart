@@ -8,30 +8,36 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'package:dlsud_go/screens/splash/splash_screen.dart';
+import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 void main() async {
-  // Ensure Flutter bindings are initialized
+  // 1. Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
+  // Remove the redundant second call to WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
+  // 2. Initialize EasyLocalization (Must run immediately after bindings are ensured)
+  await EasyLocalization.ensureInitialized();
+
+  // 3. Initialize Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // Load the .env file
+  // 4. Load the .env file
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
     debugPrint('Error loading .env file: $e');
   }
 
-  // Initialize Supabase
+  // 5. Initialize Supabase
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
 
-  // Set preferred orientations (portrait only for better UX)
+  // 6. Set preferred orientations (portrait only for better UX)
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]);
@@ -39,7 +45,15 @@ void main() async {
   final settingsService = SettingsService();
   await settingsService.loadSettings();
 
-  runApp(DLSUGoApp(settingsService: settingsService));
+  // 7. WRAP YOUR APP WITH EasyLocalization
+  runApp(
+    EasyLocalization(
+      supportedLocales: const [Locale('en', 'US'), Locale('tl', 'PH')],
+      path: 'assets/translations',
+      fallbackLocale: const Locale('en', 'US'),
+      child: DLSUGoApp(settingsService: settingsService),
+    ),
+  );
 }
 
 class DLSUGoApp extends StatelessWidget {
@@ -54,15 +68,23 @@ class DLSUGoApp extends StatelessWidget {
         builder: (context, settings, child) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'DLSU-D Go',
+
+            // USE THE .tr() EXTENSION FOR TITLE
+            onGenerateTitle: (context) => 'app_title'.tr(),
+
+            // ADD LOCALIZATION DELEGATES AND SUPPORTED LOCALES
+            localizationsDelegates: context.localizationDelegates,
+            supportedLocales: context.supportedLocales,
+            locale: context.locale,
+
+            // THEME LOGIC REMAINS CORRECT
             theme: AppTheme.lightTheme,
             darkTheme: AppTheme.darkTheme,
             themeMode: settings.themeMode,
-            locale: settings.locale,
-            home: const SplashScreen(), // Reverted to regular SplashScreen
-            // Global error handling for better UX
+            home: const SplashScreen(),
+
+            // ... builder logic
             builder: (context, widget) {
-              // Handle text scaling for accessibility
               return MediaQuery(
                 data: MediaQuery.of(context).copyWith(
                   textScaler: MediaQuery.of(context)
@@ -78,3 +100,4 @@ class DLSUGoApp extends StatelessWidget {
     );
   }
 }
+

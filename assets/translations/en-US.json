@@ -1,0 +1,46 @@
+{
+  "app_title": "DLSU-D Go",
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "app_info": "App Information",
+    "accessibility": "Accessibility",
+    "theme": "Theme",
+    "language": "Language",
+    "support": "Support",
+    "feedback": "Feedback",
+    "admin": "Administration",
+    "admin_login": "Admin Login",
+    "logout": "Logout"
+  },
+  "dashboard": {
+    "welcome": "Welcome back,",
+    "patriot": "Patriot!",
+    "explore": "Explore",
+    "maps": "Maps",
+    "chatbot": "Chatbot",
+    "quick_access": "Quick Access",
+    "chat_assistant": "Chat Assistant",
+    "error": "Error: {}",
+    "no_sections": "No sections available",
+    "learn_more": "Learn More"
+  },
+  "sections": {
+    "admissions_title": "Admissions",
+    "admissions_desc": "Welcome to De La Salle University-Dasmariñas — a Lasallian institution that blends academic excellence with character formation.",
+    "programs_title": "Programs",
+    "programs_desc": "De La Salle University-Dasmariñas offers academic programs designed to match global standards and industry needs.",
+    "maps_title": "Maps",
+    "maps_desc": "Navigate around campus with interactive maps to find buildings, offices, and student services easily.",
+    "research_title": "Research",
+    "research_desc": "De La Salle University-Dasmariñas (DLSU-D) promotes a strong culture of research and development.",
+    "global_title": "Global",
+    "global_desc": "Engage in international linkages and exchange student programs.",
+    "global_title": "Campus Life"
+  },
+  "campus_info": {
+    "title": "About DLSU-D",
+    "button": "Explore More",
+    "about_description": "De La Salle University-Dasmariñas (DLSU-D) is a private Catholic university in Cavite founded by the De La Salle Brothers. Established in 1977, it stands as one of the largest Lasallian institutions in the Philippines."
+  }
+}
