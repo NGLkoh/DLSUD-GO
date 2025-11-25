@@ -1,11 +1,12 @@
 // lib/screens/chatbot/chatbot_screen.dart
+import 'dart:async';
 import 'dart:convert';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../core/theme/app_colors.dart';
-// ADD THESE
 import 'package:googleapis_auth/auth_io.dart';
-
+import '../../core/theme/app_colors.dart';
+import '../../models/chat_message.dart';
 
 
 // ADD THE FUNCTION HERE
@@ -69,6 +70,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isTyping = false;
+  late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
+  bool _isConnected = true;
 
 
 
@@ -76,6 +79,8 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   void initState() {
     super.initState();
     _addWelcomeMessage();
+    _checkConnectivity();
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
   }
 
   Future<void> _initializeDialogflow() async {
@@ -101,6 +106,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
+    _connectivitySubscription.cancel();
     super.dispose();
   }
 
@@ -137,13 +143,28 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     _messageController.clear();
     _scrollToBottom();
 
+    if (!_isConnected) {
+      final botResponse = ChatMessage(
+        text: 'You are offline. Please check your connection.',
+        isUser: false,
+        timestamp: DateTime.now(),
+      );
+      if(mounted) {
+        setState(() {
+          _messages.add(botResponse);
+          _isTyping = false;
+        });
+      }
+      return;
+    }
+
     try {
       // CALL DIALOGFLOW REST API
       String fulfillmentText = await sendToDialogflow(text.trim());
 
       final botResponse = ChatMessage(
         text: fulfillmentText.isEmpty
-            ? "I'm sorry, I couldn’t understand that. Can you rephrase?"
+            ? "I'm sorry, I couldn't understand that. Can you rephrase?"
             : fulfillmentText,
         isUser: false,
         timestamp: DateTime.now(),
@@ -185,39 +206,73 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     });
   }
 
+  Future<void> _checkConnectivity() async {
+    final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
+    _updateConnectionStatus(connectivityResult);
+  }
+
+  void _updateConnectionStatus(List<ConnectivityResult> results) {
+    if(mounted) {
+      setState(() {
+        _isConnected = !results.contains(ConnectivityResult.none);
+      });
+    }
+    if (!_isConnected) {
+      _showConnectivitySnackBar();
+    }
+  }
+
+  void _showConnectivitySnackBar() {
+    if(mounted) {
+      final snackBar = SnackBar(
+        content: const Text('You are offline. Please check your connection.'),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 3),
+      );
+      ScaffoldMessenger.of(context).showSnackBar(snackBar);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // 🔑 Detect dark mode
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDarkMode ? Colors.grey[900] : Colors.white;
+    final surfaceColor = isDarkMode ? Colors.grey[850] : AppColors.surfaceColor;
+    final textColor = isDarkMode ? Colors.white : AppColors.textDark;
+
     return Scaffold(
+      backgroundColor: isDarkMode ? Colors.grey[900] : AppColors.backgroundColor,
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            CircleAvatar(
+            const CircleAvatar(
               backgroundColor: AppColors.primaryGreen,
               radius: 20,
               child: Icon(Icons.favorite, color: Colors.white, size: 22),
             ),
-            SizedBox(width: 12),
+            const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'Lily',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primaryGreen),
                 ),
                 Text(
                   'Your campus guide',
-                  style: TextStyle(fontSize: 11, color: AppColors.textMedium, fontWeight: FontWeight.w500),
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: isDarkMode ? Colors.grey[400] : AppColors.textMedium,
+                      fontWeight: FontWeight.w500
+                  ),
                 ),
               ],
             ),
           ],
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: backgroundColor,
         elevation: 2,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
         actions: [
           PopupMenuButton<String>(
             onSelected: (value) {
@@ -260,16 +315,20 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           // Language toggle (placeholder for future implementation)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: AppColors.surfaceColor,
-            child: const Row(
+            color: surfaceColor,
+            child: Row(
               children: [
-                Icon(Icons.language, size: 16, color: AppColors.textMedium),
-                SizedBox(width: 8),
+                Icon(
+                    Icons.language,
+                    size: 16,
+                    color: isDarkMode ? Colors.grey[400] : AppColors.textMedium
+                ),
+                const SizedBox(width: 8),
                 Text(
                   'English/Filipino support available',
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textMedium,
+                    color: isDarkMode ? Colors.grey[400] : AppColors.textMedium,
                   ),
                 ),
               ],
@@ -301,6 +360,16 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
 
   Widget _buildMessageBubble(ChatMessage message) {
     final isUser = message.isUser;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Dynamic colors for chat bubbles
+    final userBubbleColor = isDarkMode ? Colors.green[700] : AppColors.chatUserBubble;
+    final botBubbleColor = isDarkMode ? Colors.grey[800] : AppColors.chatBotBubble;
+    final userTextColor = Colors.white;
+    final botTextColor = isDarkMode ? Colors.white : AppColors.textDark;
+    final timestampColor = isUser
+        ? Colors.white70
+        : (isDarkMode ? Colors.grey[400] : AppColors.textLight);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -321,7 +390,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: isUser ? AppColors.chatUserBubble : AppColors.chatBotBubble,
+                color: isUser ? userBubbleColor : botBubbleColor,
                 borderRadius: BorderRadius.circular(18).copyWith(
                   bottomLeft: isUser ? const Radius.circular(18) : const Radius.circular(4),
                   bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(18),
@@ -333,7 +402,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                   Text(
                     message.text,
                     style: TextStyle(
-                      color: isUser ? Colors.white : AppColors.textDark,
+                      color: isUser ? userTextColor : botTextColor,
                       fontSize: 15,
                       height: 1.4,
                     ),
@@ -342,7 +411,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
                   Text(
                     _formatTime(message.timestamp),
                     style: TextStyle(
-                      color: isUser ? Colors.white70 : AppColors.textLight,
+                      color: timestampColor,
                       fontSize: 11,
                     ),
                   ),
@@ -365,6 +434,9 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   }
 
   Widget _buildTypingIndicator() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final bubbleColor = isDarkMode ? Colors.grey[800] : AppColors.chatBotBubble;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       child: Row(
@@ -378,7 +450,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.chatBotBubble,
+              color: bubbleColor,
               borderRadius: BorderRadius.circular(18),
             ),
             child: Row(
@@ -424,13 +496,18 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   }
 
   Widget _buildMessageInput() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDarkMode ? Colors.grey[850] : Colors.white;
+    final inputColor = isDarkMode ? Colors.grey[800] : AppColors.surfaceColor;
+    final textColor = isDarkMode ? Colors.white : AppColors.textDark;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: backgroundColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withOpacity(isDarkMode ? 0.2 : 0.1),
             blurRadius: 10,
             offset: const Offset(0, -5),
           ),
@@ -441,16 +518,20 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
           Expanded(
             child: Container(
               decoration: BoxDecoration(
-                color: AppColors.surfaceColor,
+                color: inputColor,
                 borderRadius: BorderRadius.circular(25),
               ),
               child: TextField(
                 controller: _messageController,
                 maxLines: null,
-                decoration: const InputDecoration(
+                style: TextStyle(color: textColor),
+                decoration: InputDecoration(
                   hintText: 'Type message',
+                  hintStyle: TextStyle(
+                    color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
+                  ),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 ),
                 onSubmitted: _sendMessage,
               ),
@@ -486,15 +567,27 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   }
 
   void _showClearChatDialog() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear Chat'),
-        content: const Text('Are you sure you want to clear all messages?'),
+        backgroundColor: isDarkMode ? Colors.grey[850] : null,
+        title: Text(
+          'Clear Chat',
+          style: TextStyle(color: isDarkMode ? Colors.white : null),
+        ),
+        content: Text(
+          'Are you sure you want to clear all messages?',
+          style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: isDarkMode ? Colors.grey[400] : null),
+            ),
           ),
           TextButton(
             onPressed: () {
@@ -504,7 +597,10 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
               Navigator.pop(context);
               _addWelcomeMessage();
             },
-            child: const Text('Clear'),
+            child: const Text(
+              'Clear',
+              style: TextStyle(color: AppColors.primaryGreen),
+            ),
           ),
         ],
       ),
@@ -512,9 +608,12 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   }
 
   void _showHelpDialog() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: isDarkMode ? Colors.grey[850] : null,
         title: const Row(
           children: [
             Icon(Icons.favorite, color: AppColors.primaryGreen),
@@ -522,63 +621,91 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             Text('Lily\'s Guide'),
           ],
         ),
-        content: const SingleChildScrollView(
+        content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 '✨ What Lily can help with:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: isDarkMode ? Colors.white : null,
+                ),
               ),
-              SizedBox(height: 12),
-              Text('🗺️ Campus navigation and directions'),
-              SizedBox(height: 6),
-              Text('📚 Student services & academic info'),
-              SizedBox(height: 6),
-              Text('🏢 Office locations and hour'),
-              SizedBox(height: 6),
-              Text('💳 Payment and enrollment details'),
-              SizedBox(height: 6),
-              Text('🎓 Academic programs and courses'),
-              SizedBox(height: 6),
-              Text('❓ General campus questions'),
-              SizedBox(height: 20),
+              const SizedBox(height: 12),
+              Text(
+                '🗺️ Campus navigation and directions',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '📚 Student services & academic info',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '🏢 Office locations and hour',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '💳 Payment and enrollment details',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '🎓 Academic programs and courses',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '❓ General campus questions',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
+              const SizedBox(height: 20),
               Text(
                 '💡 Tips for better results:',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: isDarkMode ? Colors.white : null,
+                ),
               ),
-              SizedBox(height: 12),
-              Text('• Ask specific, clear questions'),
-              SizedBox(height: 6),
-              Text('• Use keywords like "payment", "directions"'),
-              SizedBox(height: 6),
-              Text('• Ask in English or Filipino'),
-              SizedBox(height: 6),
-              Text('• Try rephrasing if unsure'),
+              const SizedBox(height: 12),
+              Text(
+                '• Ask specific, clear questions',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '• Use keywords like "payment", "directions"',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '• Ask in English or Filipino',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '• Try rephrasing if unsure',
+                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
+              ),
             ],
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Got it! 👍'),
+            child: const Text(
+              'Got it! 👍',
+              style: TextStyle(color: AppColors.primaryGreen),
+            ),
           ),
         ],
       ),
     );
   }
-}
-
-// lib/models/chat_message.dart
-class ChatMessage {
-  final String text;
-  final bool isUser;
-  final DateTime timestamp;
-
-  ChatMessage({
-    required this.text,
-    required this.isUser,
-    required this.timestamp,
-  });
 }
