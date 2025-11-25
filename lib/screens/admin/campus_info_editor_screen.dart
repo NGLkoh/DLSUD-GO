@@ -101,8 +101,6 @@ class _CampusInfoEditorScreenState extends State<CampusInfoEditorScreen> {
 
           _buildTextField(_titleController, 'Title *'),
           const SizedBox(height: 16),
-          _buildTextField(_subtitleController, 'Subtitle *'),
-          const SizedBox(height: 16),
           _buildTextField(_descriptionController, 'Description', maxLines: 4),
           const SizedBox(height: 16),
           _buildTextField(_buttonTextController, 'Button Text'),
@@ -188,8 +186,7 @@ class _CampusInfoEditorScreenState extends State<CampusInfoEditorScreen> {
 
             _buildTextField(data.title, 'Section Title'),
             const SizedBox(height: 12),
-            _buildTextField(data.description, 'Section Description', maxLines: 2),
-            const SizedBox(height: 12),
+
 
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,

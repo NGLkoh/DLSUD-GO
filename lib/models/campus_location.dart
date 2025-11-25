@@ -139,13 +139,7 @@ class CampusLocation {
       latitude: 14.3208,
       longitude: 120.9619,
       icon: Icons.local_library,
-      imagePaths: [
-        'assets/images/AEA Road (1).webp',
-        'assets/images/AEA Road (2).webp',
-        'assets/images/AEA Road (3).webp',
-        'assets/images/AEA Road (4).webp'
-      ],
-      panoramaUrl: null, // Will be loaded from Firebase
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764049260593.jpg',
     ),
     CampusLocation(
       id: 'agh',
