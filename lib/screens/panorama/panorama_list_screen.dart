@@ -533,79 +533,79 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
                                 }
                               },
                             ),
-                            IconButton(
-                              icon: Icon(
-                                assignedLocation != null ? Icons.edit_location : Icons.location_on,
-                                color: assignedLocation != null ? Colors.green : Colors.blue,
-                              ),
-                              tooltip: assignedLocation != null
-                                  ? "Change Location"
-                                  : "Set to Campus Location",
-                              onPressed: () async {
-                                final selected = await showDialog<CampusLocation>(
-                                  context: context,
-                                  builder: (context) => AlertDialog(
-                                    title: const Text("Select Campus Location"),
-                                    content: SizedBox(
-                                      width: double.maxFinite,
-                                      height: 300,
-                                      child: ListView(
-                                        children: CampusLocation.allLocations.map((location) {
-                                          final isCurrentlyAssigned = assignedLocation == location.id;
-                                          final hasOtherPanorama = _locationPanoramaUrls[location.id] != null &&
-                                              !isCurrentlyAssigned;
-
-                                          return ListTile(
-                                            title: Text(location.name),
-                                            subtitle: Text(location.description),
-                                            trailing: isCurrentlyAssigned
-                                                ? const Icon(Icons.check_circle, color: Colors.green)
-                                                : hasOtherPanorama
-                                                ? const Icon(Icons.warning, color: Colors.orange)
-                                                : null,
-                                            onTap: () => Navigator.pop(context, location),
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
-                                  ),
-                                );
-
-                                if (selected != null) {
-                                  // Check if location already has a panorama
-                                  final existingUrl = _locationPanoramaUrls[selected.id];
-                                  if (existingUrl != null && existingUrl != coverImage) {
-                                    final replace = await showDialog<bool>(
-                                      context: context,
-                                      builder: (context) => AlertDialog(
-                                        title: const Text("Replace Existing Panorama?"),
-                                        content: Text(
-                                          "${selected.name} already has a panorama assigned. Do you want to replace it?",
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(context, false),
-                                            child: const Text("Cancel"),
-                                          ),
-                                          TextButton(
-                                            onPressed: () => Navigator.pop(context, true),
-                                            child: const Text("Replace"),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                    if (replace != true) return;
-                                  }
-
-                                  // Assign panorama to the selected location
-                                  await _assignPanoramaToLocation(
-                                    selected.id,
-                                    selected.name,
-                                    coverImage,
-                                  );
-                                }
-                              },
-                            ),
+                            // IconButton(
+                            //   icon: Icon(
+                            //     assignedLocation != null ? Icons.edit_location : Icons.location_on,
+                            //     color: assignedLocation != null ? Colors.green : Colors.blue,
+                            //   ),
+                            //   tooltip: assignedLocation != null
+                            //       ? "Change Location"
+                            //       : "Set to Campus Location",
+                            //   onPressed: () async {
+                            //     final selected = await showDialog<CampusLocation>(
+                            //       context: context,
+                            //       builder: (context) => AlertDialog(
+                            //         title: const Text("Select Campus Location"),
+                            //         content: SizedBox(
+                            //           width: double.maxFinite,
+                            //           height: 300,
+                            //           child: ListView(
+                            //             children: CampusLocation.allLocations.map((location) {
+                            //               final isCurrentlyAssigned = assignedLocation == location.id;
+                            //               final hasOtherPanorama = _locationPanoramaUrls[location.id] != null &&
+                            //                   !isCurrentlyAssigned;
+                            //
+                            //               return ListTile(
+                            //                 title: Text(location.name),
+                            //                 subtitle: Text(location.description),
+                            //                 trailing: isCurrentlyAssigned
+                            //                     ? const Icon(Icons.check_circle, color: Colors.green)
+                            //                     : hasOtherPanorama
+                            //                     ? const Icon(Icons.warning, color: Colors.orange)
+                            //                     : null,
+                            //                 onTap: () => Navigator.pop(context, location),
+                            //               );
+                            //             }).toList(),
+                            //           ),
+                            //         ),
+                            //       ),
+                            //     );
+                            //
+                            //     if (selected != null) {
+                            //       // Check if location already has a panorama
+                            //       final existingUrl = _locationPanoramaUrls[selected.id];
+                            //       if (existingUrl != null && existingUrl != coverImage) {
+                            //         final replace = await showDialog<bool>(
+                            //           context: context,
+                            //           builder: (context) => AlertDialog(
+                            //             title: const Text("Replace Existing Panorama?"),
+                            //             content: Text(
+                            //               "${selected.name} already has a panorama assigned. Do you want to replace it?",
+                            //             ),
+                            //             actions: [
+                            //               TextButton(
+                            //                 onPressed: () => Navigator.pop(context, false),
+                            //                 child: const Text("Cancel"),
+                            //               ),
+                            //               TextButton(
+                            //                 onPressed: () => Navigator.pop(context, true),
+                            //                 child: const Text("Replace"),
+                            //               ),
+                            //             ],
+                            //           ),
+                            //         );
+                            //         if (replace != true) return;
+                            //       }
+                            //
+                            //       // Assign panorama to the selected location
+                            //       await _assignPanoramaToLocation(
+                            //         selected.id,
+                            //         selected.name,
+                            //         coverImage,
+                            //       );
+                            //     }
+                            //   },
+                            // ),
                           ],
                         ),
                       )

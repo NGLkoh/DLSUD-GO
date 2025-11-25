@@ -175,7 +175,7 @@ class CampusLocation {
       latitude: 14.3234,
       longitude: 120.9592,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764082533768.jpg',
     ),
     CampusLocation(
       id: 'ceat',
@@ -202,7 +202,7 @@ class CampusLocation {
       latitude: 14.3211,
       longitude: 120.9622,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764083895940.jpg',
     ),
     CampusLocation(
       id: 'fdh',
@@ -211,7 +211,7 @@ class CampusLocation {
       latitude: 14.3202,
       longitude: 120.9628,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764081220591.jpg',
     ),
     CampusLocation(
       id: 'fch',
@@ -220,7 +220,7 @@ class CampusLocation {
       latitude: 14.3222,
       longitude: 120.9596,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764082417471.jpg',
     ),
     CampusLocation(
       id: 'gate_1',
@@ -229,7 +229,7 @@ class CampusLocation {
       latitude: 14.3216,
       longitude: 120.9635,
       icon: Icons.door_front_door,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764081152365.jpg',
     ),
     CampusLocation(
       id: 'gate_3',
@@ -247,7 +247,7 @@ class CampusLocation {
       latitude: 14.3252,
       longitude: 120.9581,
       icon: Icons.sports,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764082330252.jpg',
     ),
     CampusLocation(
       id: 'gdh',
@@ -256,7 +256,7 @@ class CampusLocation {
       latitude: 14.3225,
       longitude: 120.9588,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764082137124.jpg',
     ),
     CampusLocation(
       id: 'gmh',
@@ -265,7 +265,7 @@ class CampusLocation {
       latitude: 14.3232,
       longitude: 120.9588,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764083540402.jpg',
     ),
     CampusLocation(
       id: 'hotel_rafael',
@@ -295,22 +295,13 @@ class CampusLocation {
       panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764069533901.jpg',
     ),
     CampusLocation(
-      id: 'kabalikat',
-      name: 'Kabalikat ng DLSU-D',
-      description: 'Office',
-      latitude: 14.3236,
-      longitude: 120.9597,
-      icon: Icons.group_work,
-      panoramaUrl:'',
-    ),
-    CampusLocation(
       id: 'ldh',
       name: 'Ladislao Diwa Hall (LDH)',
       description: 'Campus Building',
       latitude: 14.3225,
       longitude: 120.9597,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764082012129.jpg',
     ),
     CampusLocation(
       id: 'cafeteria',
@@ -319,7 +310,7 @@ class CampusLocation {
       latitude: 14.3275,
       longitude: 120.9392,
       icon: Icons.restaurant,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764083659802.jpg',
     ),
     CampusLocation(
       id: 'dormitories',
@@ -337,7 +328,7 @@ class CampusLocation {
       latitude: 14.3237,
       longitude: 120.9582,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764082474526.jpg',
     ),
     CampusLocation(
       id: 'malvarez',
@@ -355,7 +346,7 @@ class CampusLocation {
       latitude: 14.3237,
       longitude: 120.9587,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764081559845.jpg',
     ),
     CampusLocation(
       id: 'museo',
@@ -391,7 +382,7 @@ class CampusLocation {
       latitude: 14.3210,
       longitude: 120.9626,
       icon: Icons.business,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764083316350.jpg',
     ),
     CampusLocation(
       id: 'residencia',
@@ -454,7 +445,7 @@ class CampusLocation {
       latitude: 14.3215,
       longitude: 120.9601,
       icon: Icons.fastfood,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764081832591.jpg',
     ),
     CampusLocation(
       id: 'vbh',
@@ -508,7 +499,7 @@ class CampusLocation {
       latitude: 14.3267,
       longitude: 120.9568,
       icon: Icons.fastfood,
-      panoramaUrl:'',
+      panoramaUrl:'https://hgaffhpmmmifhoigwoqp.supabase.co/storage/v1/object/public/panoramas/panorama_stitched_1764081924119.jpg',
     ),
     CampusLocation(
       id: 'cbaa',

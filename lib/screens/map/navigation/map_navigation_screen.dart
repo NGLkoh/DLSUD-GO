@@ -1,27 +1,24 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart' as geolocator;
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
-
-// --- MODELS & IMPORTS ---
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+// --- 1. MODELS ---
 import 'package:dlsud_go/widgets/image_gallery_screen.dart';
 import 'package:dlsud_go/screens/panorama/panorama_view_screen.dart';
 import 'package:dlsud_go/models/campus_location.dart';
 
-// --- CONSTANTS ---
-class NavigationConstants {
-  static const double defaultZoom = 16.0;
-  static const double navigationZoom = 18.5;
-  static const double navigationPitch = 50.0;
-  static const double stepCompletionThreshold = 15.0;
-  static const Color dlsuGreen = Color(0xFF007B3E); // Official Green
-  static const Color accentGreen = Color(0xFF00A855); // Lighter accent
-}
+CircleAnnotationManager? circleAnnotationManager;
+PolylineAnnotationManager? polylineAnnotationManager;
+Map<String, String> _annotationToLocationId = {};
+
+// ❌ REMOVE THIS DUPLICATE CLASS - Already imported above!
+// Delete lines 17-71 (the CampusLocation class definition)
 
 class NavigationStep {
   final String instruction;
@@ -54,6 +51,20 @@ class NavigationStep {
   }
 }
 
+// --- 2. CONSTANTS ---
+
+class NavigationConstants {
+  static const double defaultZoom = 16.0;
+  static const double navigationZoom = 18.5;
+  static const double navigationPitch = 60.0;
+  static const double stepCompletionThreshold = 15.0;
+  static const Color routeColor = Color(0xFF007B3E); // DLSU Green
+  static const double defaultLat = 14.3250;
+  static const double defaultLng = 120.9580;
+}
+
+// --- 3. MAIN SCREEN ---
+
 class MapNavigationScreen extends StatefulWidget {
   const MapNavigationScreen({super.key});
 
@@ -64,59 +75,55 @@ class MapNavigationScreen extends StatefulWidget {
 class _MapNavigationScreenState extends State<MapNavigationScreen> {
   MapboxMap? mapboxMap;
 
-  // Data & State
   final List<CampusLocation> _allLocations = CampusLocation.allLocations;
-  List<CampusLocation> _filteredLocations = [];
-  final TextEditingController _searchController = TextEditingController();
-
   CampusLocation? _destination;
   geolocator.Position? _currentPosition;
   String _currentLocationLabel = "Locating...";
 
-  // Navigation State
   bool _isCalculatingRoute = false;
   bool _isNavigating = false;
+
   double? _routeDistance;
   double? _routeDuration;
   List<NavigationStep> _navigationSteps = [];
   int _currentStepIndex = 0;
   double _distanceToNextStep = 0;
 
-  // Distance Tracking State
-  double _totalDistanceTraveled = 0.0;
-  geolocator.Position? _lastNavPosition;
-
   StreamSubscription<geolocator.Position>? _positionSubscription;
 
-  // Map Managers
-  CircleAnnotationManager? circleAnnotationManager;
-  PointAnnotationManager? pointAnnotationManager;
-  PolylineAnnotationManager? polylineAnnotationManager;
+  // 1. ADD SEARCH STATE
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
+
 
   @override
   void initState() {
     super.initState();
-    _filteredLocations = _allLocations;
     _initializeUserLocation();
   }
 
   @override
   void dispose() {
     _positionSubscription?.cancel();
-    _searchController.dispose();
     circleAnnotationManager?.deleteAll();
     pointAnnotationManager?.deleteAll();
     polylineAnnotationManager?.deleteAll();
+    _searchController.dispose(); // Dispose the controller
     super.dispose();
   }
 
-  // --- MAP SETUP ---
+  // --- MAP LOGIC ---
+  CircleAnnotationManager? circleAnnotationManager; // Fallback
+  PointAnnotationManager? pointAnnotationManager;   // For images
+
+// UPDATE _onMapCreated to create BOTH managers:
 
   void _onMapCreated(MapboxMap mapboxMap) async {
     this.mapboxMap = mapboxMap;
+
     await _enable3DBuildings();
 
-    // Initialize all annotation managers
+    // Create BOTH annotation managers
     circleAnnotationManager = await mapboxMap.annotations.createCircleAnnotationManager();
     pointAnnotationManager = await mapboxMap.annotations.createPointAnnotationManager();
     polylineAnnotationManager = await mapboxMap.annotations.createPolylineAnnotationManager();
@@ -126,7 +133,6 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
         enabled: true,
         pulsingEnabled: true,
         pulsingColor: Colors.blueAccent.value,
-        puckBearingEnabled: true,
       ),
     );
 
@@ -136,93 +142,139 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
       _handleMapTap(context.point);
     });
   }
-
-  // 3D Buildings Logic
+  // --- FEATURE: 3D BUILDINGS (FIXED TYPE ERROR) ---
   Future<void> _enable3DBuildings() async {
     if (mapboxMap == null) return;
+
     try {
       final style = mapboxMap!.style;
+
       if (await style.styleLayerExists("3d-buildings")) return;
 
+      // 1. Create layer with placeholders (to satisfy strict double type checks)
       var fillExtrusionLayer = FillExtrusionLayer(
         id: "3d-buildings",
         sourceId: "composite",
         sourceLayer: "building",
-        minZoom: 15.0,
-        fillExtrusionColor: Colors.grey[400]!.value,
+        minZoom: 15.0, // OPTIMIZATION: Only render when zoomed in
+        fillExtrusionColor: Colors.grey[300]!.value, // Neutral building color
         fillExtrusionOpacity: 0.9,
       );
 
+      // 2. Add the layer
       await style.addLayer(fillExtrusionLayer);
+
+      // 3. Apply the expressions dynamically using raw JSON properties
+      // This bypasses the strict 'double' type requirement of the Dart class
       await style.setStyleLayerProperty("3d-buildings", "fill-extrusion-height", ["get", "height"]);
       await style.setStyleLayerProperty("3d-buildings", "fill-extrusion-base", ["get", "min_height"]);
 
     } catch (e) {
-      debugPrint("3D Building error: $e");
+      debugPrint("Failed to enable 3D buildings: $e");
     }
   }
 
-  // --- MARKERS & INTERACTION ---
-
   Future<void> _loadLocationMarkers() async {
-    if (pointAnnotationManager == null || circleAnnotationManager == null) return;
+    if (pointAnnotationManager == null || circleAnnotationManager == null) {
+      debugPrint('❌ Annotation managers not ready');
+      return;
+    }
+
     await pointAnnotationManager!.deleteAll();
     await circleAnnotationManager!.deleteAll();
 
+    debugPrint('✅ Loading ${_allLocations.length} markers...');
+
     for (var location in _allLocations) {
       bool imageLoaded = false;
+
+      // Try to load image marker first
       if (location.imagePaths.isNotEmpty) {
         Uint8List? imageBytes = await _loadImageAsBytes(location.mainImage);
+
         if (imageBytes != null) {
           try {
             await pointAnnotationManager!.create(
               PointAnnotationOptions(
-                geometry: Point(coordinates: Position(location.longitude, location.latitude)),
+                geometry: Point(
+                  coordinates: Position(location.longitude, location.latitude),
+                ),
                 image: imageBytes,
-                iconSize: 0.3,
+                iconSize: 0.25,
                 iconAnchor: IconAnchor.BOTTOM,
               ),
             );
             imageLoaded = true;
+            debugPrint('✅ Image marker: ${location.name}');
           } catch (e) {
             debugPrint('⚠️ Image marker failed for ${location.name}: $e');
           }
         }
       }
+
+      // Fallback to circle if image failed or doesn't exist
       if (!imageLoaded) {
         await circleAnnotationManager!.create(
           CircleAnnotationOptions(
-            geometry: Point(coordinates: Position(location.longitude, location.latitude)),
-            circleColor: NavigationConstants.dlsuGreen.value,
-            circleRadius: 8.0,
-            circleStrokeWidth: 2.0,
+            geometry: Point(
+              coordinates: Position(location.longitude, location.latitude),
+            ),
+            circleColor: Colors.red.value,
+            circleRadius: 12.0,
+            circleStrokeWidth: 3.0,
             circleStrokeColor: Colors.white.value,
           ),
         );
+        debugPrint('🔴 Circle marker (fallback): ${location.name}');
       }
     }
-  }
 
+    debugPrint('✅ All markers loaded');
+  }
+  // ADD this helper method to load images:
   Future<Uint8List?> _loadImageAsBytes(String assetPath) async {
     try {
+      debugPrint('   🔄 Loading image from: $assetPath');
+
+      // Load the asset as ByteData
       final ByteData data = await rootBundle.load(assetPath);
+      debugPrint('   ✅ Asset loaded: ${data.lengthInBytes} bytes');
+
+      // Decode to image
       final ui.Codec codec = await ui.instantiateImageCodec(
         data.buffer.asUint8List(),
-        targetWidth: 150,
+        targetWidth: 150, // Increased resolution
         targetHeight: 150,
       );
+
       final ui.FrameInfo frameInfo = await codec.getNextFrame();
       final ui.Image image = frameInfo.image;
-      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      return byteData?.buffer.asUint8List();
+      debugPrint('   ✅ Image decoded: ${image.width}x${image.height}');
+
+      // Convert to PNG bytes
+      final ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
+      if (byteData == null) {
+        debugPrint('   ❌ Failed to convert image to PNG bytes');
+        return null;
+      }
+
+      debugPrint('   ✅ Image converted to PNG: ${byteData.lengthInBytes} bytes');
+      return byteData.buffer.asUint8List();
+
     } catch (e) {
+      debugPrint('   ❌ Error loading image $assetPath: $e');
       return null;
     }
   }
 
+
   void _handleMapTap(Point coordinate) {
     CampusLocation? closestMatch;
     double shortestDistance = double.infinity;
+    const double hitThreshold = 120.0; // Generous hit area
 
     for (var location in _allLocations) {
       final distance = geolocator.Geolocator.distanceBetween(
@@ -232,19 +284,55 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
         location.longitude,
       );
 
-      if (distance < 100 && distance < shortestDistance) {
+      if (distance < hitThreshold && distance < shortestDistance) {
         shortestDistance = distance;
         closestMatch = location;
       }
     }
 
     if (closestMatch != null) {
-      setState(() => _destination = closestMatch);
+      setState(() {
+        _destination = closestMatch;
+      });
       _drawRoute();
+
+      // This logic seems incorrect. You probably want to show the sheet, not pop the current context
+      // if (Navigator.canPop(context)) {
+      //   Navigator.pop(context);
+      // }
+      _openSearchSheet();
     }
   }
 
-  // --- LOCATION & ROUTING ---
+  void _updateNearestLocationLabel(geolocator.Position position) {
+    if (_allLocations.isEmpty) return;
+
+    CampusLocation? nearest;
+    double minDistance = double.infinity;
+
+    for (var loc in _allLocations) {
+      double dist = geolocator.Geolocator.distanceBetween(
+          position.latitude, position.longitude, loc.latitude, loc.longitude
+      );
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearest = loc;
+      }
+    }
+
+    String label;
+    if (nearest != null && minDistance < 100) {
+      label = "Near ${nearest.name}";
+    } else {
+      label = "Current Location";
+    }
+
+    if (mounted && label != _currentLocationLabel) {
+      setState(() {
+        _currentLocationLabel = label;
+      });
+    }
+  }
 
   Future<void> _initializeUserLocation() async {
     bool serviceEnabled = await geolocator.Geolocator.isLocationServiceEnabled();
@@ -259,41 +347,26 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
     final position = await geolocator.Geolocator.getCurrentPosition();
     if (mounted) {
       setState(() => _currentPosition = position);
-      _updateLocationLabel(position);
+      _updateNearestLocationLabel(position);
 
       mapboxMap?.flyTo(
           CameraOptions(
             center: Point(coordinates: Position(position.longitude, position.latitude)),
             zoom: NavigationConstants.defaultZoom,
+            pitch: NavigationConstants.navigationPitch,
           ),
           MapAnimationOptions(duration: 1000)
       );
     }
   }
 
-  void _updateLocationLabel(geolocator.Position position) {
-    if (_allLocations.isEmpty) return;
-    CampusLocation? nearest;
-    double minDistance = double.infinity;
-    for (var loc in _allLocations) {
-      double dist = geolocator.Geolocator.distanceBetween(
-          position.latitude, position.longitude, loc.latitude, loc.longitude
-      );
-      if (dist < minDistance) {
-        minDistance = dist;
-        nearest = loc;
-      }
-    }
-    String label = (nearest != null && minDistance < 100) ? "Near ${nearest.name}" : "On Campus";
-    if (mounted && label != _currentLocationLabel) {
-      setState(() => _currentLocationLabel = label);
-    }
-  }
+  // --- ROUTING ---
 
   Future<void> _drawRoute() async {
     if (_currentPosition == null || _destination == null) return;
-    setState(() => _isCalculatingRoute = true);
+
     await polylineAnnotationManager?.deleteAll();
+    setState(() => _isCalculatingRoute = true);
 
     final String? accessToken = dotenv.env['MAPBOX_ACCESS_TOKEN'];
     if (accessToken == null) return;
@@ -316,7 +389,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
 
           await polylineAnnotationManager?.create(PolylineAnnotationOptions(
             geometry: LineString(coordinates: routeCoords),
-            lineColor: NavigationConstants.dlsuGreen.value,
+            lineColor: NavigationConstants.routeColor.value,
             lineWidth: 6.0,
             lineJoin: LineJoin.ROUND,
           ));
@@ -327,6 +400,8 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
               steps.add(NavigationStep.fromJson(step));
             }
           }
+
+          _fitMapToRoute(routeCoords);
 
           if (mounted) {
             setState(() {
@@ -339,19 +414,31 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
         }
       }
     } catch (e) {
-      debugPrint("Route error: $e");
-      if (mounted) setState(() => _isCalculatingRoute = false);
+      setState(() => _isCalculatingRoute = false);
     }
   }
 
-  // --- NAVIGATION LOGIC ---
+  void _fitMapToRoute(List<Position> coords) async {
+    if (mapboxMap == null || coords.isEmpty) return;
+    final cameraOptions = await mapboxMap!.cameraForCoordinates(
+        coords.map((e) => Point(coordinates: e)).toList(),
+        MbxEdgeInsets(top: 150, left: 50, bottom: 350, right: 50),
+        NavigationConstants.navigationPitch,
+        null
+    );
+    mapboxMap!.flyTo(cameraOptions, MapAnimationOptions(duration: 1000));
+  }
+
+  // --- NAVIGATION EXECUTION ---
 
   void _startNavigation() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
+
     setState(() {
       _isNavigating = true;
       _currentStepIndex = 0;
-      _totalDistanceTraveled = 0.0;
-      _lastNavPosition = null;
     });
 
     _positionSubscription?.cancel();
@@ -362,14 +449,8 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
       ),
     ).listen((pos) {
       if (!_isNavigating) return;
-
-      double delta = 0.0;
-      if (_lastNavPosition != null) {
-        delta = geolocator.Geolocator.distanceBetween(
-          _lastNavPosition!.latitude, _lastNavPosition!.longitude,
-          pos.latitude, pos.longitude,
-        );
-      }
+      _currentPosition = pos;
+      _updateNearestLocationLabel(pos);
 
       mapboxMap?.flyTo(
         CameraOptions(
@@ -378,85 +459,57 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
           bearing: pos.heading,
           pitch: NavigationConstants.navigationPitch,
         ),
-        MapAnimationOptions(duration: 800),
+        MapAnimationOptions(duration: 500),
       );
 
-      setState(() {
-        if (_lastNavPosition != null && delta > 0.5) {
-          _totalDistanceTraveled += delta;
-        }
-        _lastNavPosition = pos;
-        _currentPosition = pos;
-        _updateLocationLabel(pos);
+      if (_navigationSteps.isNotEmpty && _currentStepIndex < _navigationSteps.length) {
+        final step = _navigationSteps[_currentStepIndex];
+        final dist = geolocator.Geolocator.distanceBetween(
+            pos.latitude, pos.longitude, step.latitude, step.longitude
+        );
+        setState(() => _distanceToNextStep = dist);
 
-        if (_navigationSteps.isNotEmpty && _currentStepIndex < _navigationSteps.length) {
-          final step = _navigationSteps[_currentStepIndex];
-          final dist = geolocator.Geolocator.distanceBetween(
-              pos.latitude, pos.longitude, step.latitude, step.longitude
-          );
-          _distanceToNextStep = dist;
-
-          if (dist < NavigationConstants.stepCompletionThreshold) {
-            _currentStepIndex++;
-            if (_currentStepIndex >= _navigationSteps.length) {
-              _stopNavigation();
-              _showArrivalDialog();
-            }
+        if (dist < NavigationConstants.stepCompletionThreshold) {
+          setState(() => _currentStepIndex++);
+          if (_currentStepIndex >= _navigationSteps.length) {
+            _stopNavigation();
+            _showArrivalDialog();
           }
         }
-      });
+      }
     });
   }
 
   void _stopNavigation() {
     _positionSubscription?.cancel();
     setState(() => _isNavigating = false);
-
-    if (_currentPosition != null) {
-      mapboxMap?.flyTo(
-          CameraOptions(
-              center: Point(coordinates: Position(_currentPosition!.longitude, _currentPosition!.latitude)),
-              zoom: NavigationConstants.defaultZoom,
-              pitch: 0,
-              bearing: 0
-          ),
-          MapAnimationOptions(duration: 1000)
-      );
-    }
+    mapboxMap?.flyTo(
+        CameraOptions(
+            zoom: NavigationConstants.defaultZoom,
+            pitch: NavigationConstants.navigationPitch,
+            bearing: 0
+        ),
+        MapAnimationOptions(duration: 1000)
+    );
   }
 
   void _showArrivalDialog() {
     showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.check_circle, color: Colors.green),
-              SizedBox(width: 10),
-              Text("You've Arrived!"),
-            ],
-          ),
-          content: Text("You have reached ${_destination?.name}. \nTotal Distance: ${(_totalDistanceTraveled/1000).toStringAsFixed(2)} km"),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Awesome", style: TextStyle(color: NavigationConstants.dlsuGreen))
-            )
-          ],
+          title: const Text("Arrived!"),
+          content: Text("You have reached ${_destination?.name}"),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
         )
     );
   }
 
-  // --- UI BUILDING BLOCKS ---
+  // --- UI BUILD ---
 
   @override
   Widget build(BuildContext context) {
-    final showDetailsCard = _destination != null && !_isNavigating;
-
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: Colors.white,
       body: Stack(
         children: [
           // 1. MAP
@@ -464,394 +517,462 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
             onMapCreated: _onMapCreated,
             styleUri: MapboxStyles.OUTDOORS,
             cameraOptions: CameraOptions(
-              center: Point(coordinates: Position(120.9580, 14.3250)),
+              center: Point(coordinates: Position(NavigationConstants.defaultLng, NavigationConstants.defaultLat)),
               zoom: NavigationConstants.defaultZoom,
+              pitch: NavigationConstants.navigationPitch,
             ),
           ),
 
-          // 2. LOCATION PILL
-          if (!_isNavigating)
-            Positioned(
-              top: 60,
-              left: 20,
-              right: 20,
-              child: Center(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(30),
-                  child: BackdropFilter(
-                    filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.9),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
-                        ],
-                        borderRadius: BorderRadius.circular(30),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.location_on, color: NavigationConstants.dlsuGreen, size: 20),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              _currentLocationLabel,
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black87),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
 
-          // 3. BACK BUTTON (Top Left)
-          if (!_isNavigating)
-            Positioned(
-              top: 60,
-              left: 20,
-              child: FloatingActionButton.small(
-                heroTag: "backBtn",
-                backgroundColor: Colors.white,
-                child: const Icon(Icons.arrow_back, color: Colors.black87),
-                onPressed: () => Navigator.pop(context),
-              ),
-            ),
-
-          // 4. MAIN CONTROLS (Search & My Location)
-          if (!_isNavigating && !showDetailsCard) ...[
-            Positioned(
-              bottom: 40,
-              right: 20,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FloatingActionButton(
-                    heroTag: "myLoc",
-                    backgroundColor: Colors.white,
-                    child: const Icon(Icons.gps_fixed, color: Colors.grey),
-                    onPressed: () => _initializeUserLocation(),
-                  ),
-                  const SizedBox(height: 16),
-                  FloatingActionButton.extended(
-                    heroTag: "search",
-                    backgroundColor: NavigationConstants.dlsuGreen,
-                    icon: const Icon(Icons.search, color: Colors.white),
-                    label: const Text("Find Building", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                    onPressed: _openSearchSheet,
-                  ),
-                ],
-              ),
-            ),
-          ],
-
-          // 5. DESTINATION CARD
-          if (showDetailsCard)
-            _buildDestinationCard(),
-
-          // 6. NAVIGATION HUD
-          if (_isNavigating) _buildModernNavigationHUD(),
-
-          // 7. NAV CONTROLS
-          if (_isNavigating) ...[
-            Positioned(
-              bottom: 40,
-              left: 20,
-              child: FloatingActionButton(
-                heroTag: "recenterBtn",
-                backgroundColor: Colors.white,
-                foregroundColor: NavigationConstants.dlsuGreen,
-                elevation: 4,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                onPressed: () {
-                  if (_currentPosition != null) {
-                    mapboxMap?.flyTo(
-                      CameraOptions(
-                        center: Point(coordinates: Position(_currentPosition!.longitude, _currentPosition!.latitude)),
-                        zoom: NavigationConstants.navigationZoom,
-                        bearing: _currentPosition!.heading,
-                        pitch: NavigationConstants.navigationPitch,
-                      ),
-                      MapAnimationOptions(duration: 800),
-                    );
-                  }
-                },
-                child: const Icon(Icons.navigation_rounded, size: 28),
-              ),
-            ),
-
-            Positioned(
-              bottom: 40,
-              right: 20,
+          // 3. TOP CENTER "YOUR LOCATION" PILL
+          Positioned(
+            top: 50,
+            left: 70,
+            right: 70,
+            child: Center(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(30),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 4))
-                  ],
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0,2))],
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.directions_walk, size: 18, color: Colors.grey),
+                    const Icon(Icons.my_location, color: Colors.blue, size: 16),
                     const SizedBox(width: 8),
-                    Text(
-                      _formatDistance(_totalDistanceTraveled),
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        color: Colors.black87,
+                    Flexible(
+                      child: Text(
+                        _currentLocationLabel,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: Colors.black87
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          ],
+          ),
 
-          // 8. LOADING
-          if (_isCalculatingRoute)
-            Container(
-              color: Colors.black12,
-              child: const Center(
-                child: Card(
-                  elevation: 5,
-                  shape: CircleBorder(),
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: CircularProgressIndicator(color: NavigationConstants.dlsuGreen),
-                  ),
-                ),
+          // 4. BOTTOM LEFT SEARCH BUTTON
+          if (!_isNavigating)
+            Positioned(
+              bottom: 30,
+              left: 20,
+              child: FloatingActionButton(
+                heroTag: "searchBtn",
+                backgroundColor: Colors.white,
+                onPressed: _openSearchSheet,
+                child: const Icon(Icons.search, color: Colors.black87),
               ),
             ),
+
+          // 5. NAVIGATION HUD
+          if (_isNavigating) _buildNavigationHUD(),
+
+          // 6. LOADING
+          if (_isCalculatingRoute) const Center(child: CircularProgressIndicator()),
         ],
       ),
-    );
-  }
 
-  // --- WIDGET HELPERS ---
-
-  Widget _buildModernNavigationHUD() {
-    if (_navigationSteps.isEmpty || _currentStepIndex >= _navigationSteps.length) return const SizedBox.shrink();
-    final step = _navigationSteps[_currentStepIndex];
-    return Positioned(
-      top: 50, left: 16, right: 16,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [NavigationConstants.dlsuGreen, NavigationConstants.accentGreen],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [BoxShadow(color: NavigationConstants.dlsuGreen.withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 8))],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                  child: const Icon(Icons.turn_right, color: Colors.white, size: 32),
+      // 7. MY LOCATION FAB
+      floatingActionButton: (!_isNavigating) ? FloatingActionButton(
+        heroTag: "myLocBtn",
+        backgroundColor: Colors.white,
+        child: const Icon(Icons.gps_fixed, color: Colors.green),
+        onPressed: () {
+          if (_currentPosition != null) {
+            mapboxMap?.flyTo(
+                CameraOptions(
+                  center: Point(coordinates: Position(_currentPosition!.longitude, _currentPosition!.latitude)),
+                  zoom: 17,
+                  pitch: NavigationConstants.navigationPitch,
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("${_distanceToNextStep.toStringAsFixed(0)} meters", style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text(step.instruction, style: const TextStyle(color: Colors.white70, fontSize: 16), maxLines: 2, overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                ),
-                GestureDetector(onTap: _stopNavigation, child: const Icon(Icons.close, color: Colors.white70))
-              ],
-            ),
-          ],
-        ),
-      ),
+                MapAnimationOptions(duration: 1000)
+            );
+          }
+        },
+      ) : null,
     );
   }
 
-  Widget _buildDestinationCard() {
-    return Positioned(
-      bottom: 0, left: 0, right: 0,
-      child: Container(
-        height: MediaQuery.of(context).size.height * 0.55,
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-          boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 20, offset: Offset(0, -5))],
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 40, height: 4,
-              margin: const EdgeInsets.only(bottom: 20),
-              decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
-            ),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
-                children: [
-                  // Image Logic
-                  if (_destination!.imagePaths.isNotEmpty)
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => ImageGalleryScreen(
-                            imagePaths: _destination!.imagePaths,
-                            locationName: _destination!.name,
-                            initialIndex: 0)));
-                      },
-                      child: Stack(children: [
-                        Container(height: 200, width: double.infinity, decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(20)),
-                            child: ClipRRect(borderRadius: BorderRadius.circular(20),
-                                child: Image.asset(_destination!.mainImage, fit: BoxFit.cover, errorBuilder: (c,e,s)=>const Center(child: Icon(Icons.image_not_supported, size: 48, color: Colors.grey))))),
-                        if (_destination!.hasGallery) Positioned(bottom: 12, right: 12, child: Container(padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6), decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(20)), child: Row(children: [const Icon(Icons.photo_library, color: Colors.white, size: 16), const SizedBox(width: 6), Text('${_destination!.imagePaths.length}', style: const TextStyle(color: Colors.white, fontSize: 14))]))),
-                      ]),
-                    ),
-                  const SizedBox(height: 20),
-
-                  Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                    Expanded(child: Text(_destination!.name, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
-                    IconButton(icon: const Icon(Icons.close, color: Colors.grey), onPressed: () => setState(() { _destination = null; polylineAnnotationManager?.deleteAll(); }))
-                  ]),
-                  const SizedBox(height: 8),
-                  Text(_destination!.description, style: TextStyle(color: Colors.grey[600], fontSize: 15)),
-                  const SizedBox(height: 20),
-                  Row(children: [
-                    _statBadge(Icons.timer, "${_routeDuration?.toStringAsFixed(0) ?? '-'} min"),
-                    const SizedBox(width: 12),
-                    _statBadge(Icons.straighten, "${_routeDistance?.toStringAsFixed(1) ?? '-'} km"),
-                  ]),
-                  const SizedBox(height: 24),
-                  if (_destination!.hasPanorama) ...[
-                    SizedBox(width: double.infinity, height: 56, child: OutlinedButton.icon(onPressed: () {
-                      Navigator.push(context, MaterialPageRoute(builder: (_) => PanoramaViewScreen(imageUrl: _destination!.panoramaUrl!)));
-                    }, icon: const Icon(Icons.threesixty), label: const Text("View 360° Tour"), style: OutlinedButton.styleFrom(foregroundColor: NavigationConstants.dlsuGreen, side: const BorderSide(color: NavigationConstants.dlsuGreen), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))))),
-                    const SizedBox(height: 16),
-                  ],
-                  SizedBox(width: double.infinity, height: 56, child: ElevatedButton(onPressed: _startNavigation, style: ElevatedButton.styleFrom(backgroundColor: NavigationConstants.dlsuGreen, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text("Start Navigation", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)))),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // --- SLIDE-IN SHEET LOGIC ---
 
   void _openSearchSheet() {
+    // Reset search query and clear controller when opening the sheet
+    _searchQuery = '';
     _searchController.clear();
-    setState(() => _filteredLocations = _allLocations);
+    setState(() {}); // Important to reset the state outside the sheet as well
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => DraggableScrollableSheet(
-        initialChildSize: 0.9, minChildSize: 0.5, maxChildSize: 0.95,
-        builder: (_, controller) {
-          return Container(
-            decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
+      isDismissible: true,
+      enableDrag: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) {
+          return StatefulBuilder(
+              builder: (BuildContext context, StateSetter setSheetState) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  child: Column(
                     children: [
-                      const Icon(Icons.search, color: NavigationConstants.dlsuGreen),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          decoration: const InputDecoration(
-                            hintText: "Search building or office...",
-                            border: InputBorder.none,
-                          ),
-                          onChanged: (val) {
-                            setState(() {
-                              _filteredLocations = _allLocations.where((loc) =>
-                              loc.name.toLowerCase().contains(val.toLowerCase()) ||
-                                  loc.description.toLowerCase().contains(val.toLowerCase())
-                              ).toList();
-                            });
-                          },
+                      // Drag Handle
+                      Center(
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 12, bottom: 8),
+                          width: 40,
+                          height: 4,
+                          color: Colors.grey[300],
                         ),
                       ),
-                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+
+                      // Content
+                      Expanded(
+                          child: _destination == null
+                              ? _buildPlacesList(scrollController, setSheetState)
+                              : _buildDestinationDetails(scrollController, setSheetState)
+                      ),
                     ],
                   ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: StatefulBuilder(
-                      builder: (context, setSheetState) {
-                        _searchController.addListener(() => setSheetState(() {}));
-                        return ListView.builder(
-                          controller: controller,
-                          itemCount: _filteredLocations.length,
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                          itemBuilder: (_, i) {
-                            final loc = _filteredLocations[i];
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: InkWell(
-                                onTap: () {
-                                  setState(() => _destination = loc);
-                                  _drawRoute();
-                                  Navigator.pop(context);
-                                },
-                                borderRadius: BorderRadius.circular(16),
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(border: Border.all(color: Colors.grey[200]!), borderRadius: BorderRadius.circular(16)),
-                                  child: Row(
-                                    children: [
-                                      Container(width: 50, height: 50, decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(12)), child: Icon(loc.icon, color: NavigationConstants.dlsuGreen)),
-                                      const SizedBox(width: 16),
-                                      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(loc.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)), Text(loc.description, style: TextStyle(color: Colors.grey[600], fontSize: 13), maxLines: 1)])),
-                                      const Icon(Icons.chevron_right, color: Colors.grey),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      }
-                  ),
-                ),
-              ],
-            ),
+                );
+              }
           );
         },
       ),
     );
   }
 
-  Widget _statBadge(IconData icon, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(20)),
-      child: Row(children: [Icon(icon, size: 16, color: Colors.grey[700]), const SizedBox(width: 8), Text(label, style: const TextStyle(fontWeight: FontWeight.w600))]),
+  // 2. FILTERING LOGIC
+  List<CampusLocation> get _filteredLocations {
+    if (_searchQuery.isEmpty) {
+      return _allLocations;
+    }
+    final query = _searchQuery.toLowerCase();
+    return _allLocations.where((location) {
+      return location.name.toLowerCase().contains(query) ||
+          location.description.toLowerCase().contains(query);
+    }).toList();
+  }
+
+
+  Widget _buildPlacesList(ScrollController controller, StateSetter setSheetState) {
+    // 3. IMPLEMENT FUNCTIONAL SEARCH BAR (TextField)
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: TextField(
+            controller: _searchController,
+            onChanged: (value) {
+              setSheetState(() {
+                _searchQuery = value;
+              });
+            },
+            decoration: InputDecoration(
+              hintText: "Search DLSU-D...",
+              hintStyle: const TextStyle(color: Colors.grey, fontSize: 16),
+              prefixIcon: const Icon(Icons.search, color: Colors.grey),
+              contentPadding: const EdgeInsets.symmetric(vertical: 15),
+              filled: true,
+              fillColor: Colors.grey[100],
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(color: Colors.green, width: 2),
+              ),
+            ),
+          ),
+        ),
+
+        // 4. USE FILTERED LOCATIONS IN LISTVIEW
+        Expanded(
+          child: ListView.separated(
+            controller: controller,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _filteredLocations.length,
+            separatorBuilder: (ctx, i) => const Divider(height: 1),
+            itemBuilder: (ctx, i) {
+              final loc = _filteredLocations[i];
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(loc.icon, color: Colors.green, size: 24),
+                ),
+                title: Text(loc.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(loc.description, maxLines: 1, overflow: TextOverflow.ellipsis),
+                onTap: () {
+                  // Set state in the main widget to update the map
+                  this.setState(() => _destination = loc);
+                  _drawRoute();
+
+                  // Update the sheet state to show the details view
+                  setSheetState(() {});
+
+                  // Clear search query after selection
+                  _searchQuery = '';
+                  _searchController.clear();
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  String _formatDistance(double meters) {
-    return meters >= 1000 ? "${(meters / 1000).toStringAsFixed(2)} km" : "${meters.toStringAsFixed(0)} m";
+  // Replace the _buildDestinationDetails method in your MapNavigationScreen
+
+
+  Widget _buildDestinationDetails(ScrollController controller, StateSetter setSheetState) {
+    return Stack(
+      children: [
+        ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+          children: [
+            const SizedBox(height: 40),
+
+            // 1. IMAGE with Gallery Button
+            GestureDetector(
+              onTap: () {
+                if (_destination!.imagePaths.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ImageGalleryScreen(
+                        imagePaths: _destination!.imagePaths,
+                        locationName: _destination!.name,
+                        initialIndex: 0,
+                      ),
+                    ),
+                  );
+                }
+              },
+              child: Stack(
+                children: [
+                  // Image Placeholder/Widget goes here...
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // 2. INFO
+            Text(
+              _destination!.name,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _destination!.description,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+
+            // 3. CHIPS
+            Row(
+              children: [
+                _infoPill(Icons.timer, "${_routeDuration?.toStringAsFixed(0) ?? '-'} min"),
+                const SizedBox(width: 16),
+                _infoPill(Icons.straighten, "${_routeDistance?.toStringAsFixed(1) ?? '-'} km"),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // NEW: 4. 360° PANORAMA BUTTON (if available)
+            if (_destination!.hasPanorama)
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PanoramaViewScreen(
+                          imageUrl: _destination!.panoramaUrl!,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.threesixty, size: 24),
+                  label: const Text(
+                    "View 360° Tour",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF4CAF50),
+                    side: const BorderSide(color: Color(0xFF4CAF50), width: 2),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+
+
+            if (_destination!.hasPanorama) const SizedBox(height: 16),
+
+            // 5. START NAVIGATION BUTTON
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton.icon(
+                onPressed: _startNavigation,
+                icon: const Icon(Icons.directions_walk, size: 24),
+                label: const Text(
+                  "Start Navigation",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4CAF50),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+
+        // 6. POLISHED CLOSE BUTTON (Right)
+        Positioned(
+          right: 16,
+          top: 16,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: Icon(Icons.close, size: 24, color: Colors.grey[700]),
+              onPressed: () {
+                this.setState(() {
+                  _destination = null;
+                  _routeDistance = null;
+                });
+                polylineAnnotationManager?.deleteAll();
+                Navigator.pop(context);
+              },
+            ),
+          ),
+        ),
+
+        // 7. POLISHED BACK BUTTON (Left) - GOES BACK TO LIST
+        Positioned(
+          left: 16,
+          top: 16,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: Icon(Icons.arrow_back, size: 24, color: Colors.grey[700]),
+              onPressed: () {
+                this.setState(() {
+                  _destination = null;
+                  _routeDistance = null;
+                });
+                polylineAnnotationManager?.deleteAll();
+                setSheetState(() {});
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Widget _infoPill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Colors.grey[700]),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(color: Colors.grey[800], fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCircleButton({required IconData icon, required VoidCallback onTap}) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.black),
+        onPressed: onTap,
+      ),
+    );
+  }
+
+  Widget _buildNavigationHUD() {
+    if (_navigationSteps.isEmpty || _currentStepIndex >= _navigationSteps.length) return const SizedBox.shrink();
+    final step = _navigationSteps[_currentStepIndex];
+    return Positioned(
+      top: 0, left: 0, right: 0,
+      child: SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: Colors.green[800], borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)]),
+          child: Row(
+            children: [
+              const Icon(Icons.directions_walk, color: Colors.white, size: 40),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("${_distanceToNextStep.toStringAsFixed(0)} m", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text(step.instruction, style: const TextStyle(color: Colors.white70, fontSize: 16), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: _stopNavigation)
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

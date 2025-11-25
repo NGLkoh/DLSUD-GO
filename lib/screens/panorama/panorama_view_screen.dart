@@ -130,11 +130,6 @@ class _PanoramaViewScreenState extends State<PanoramaViewScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('360° Panorama'),
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-      ),
       backgroundColor: Colors.black,
       body: WebViewWidget(controller: _controller),
     );
