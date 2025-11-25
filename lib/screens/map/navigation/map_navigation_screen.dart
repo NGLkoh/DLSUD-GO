@@ -1,31 +1,25 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:dlsud_go/models/campus_location.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart' as geolocator;
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+// --- 1. MODELS ---
+import 'package:dlsud_go/widgets/image_gallery_screen.dart';
+import 'package:dlsud_go/screens/panorama/panorama_view_screen.dart';
+import 'package:dlsud_go/models/campus_location.dart';
 
-// Constants
-class NavigationConstants {
-  static const double defaultZoom = 16.0;
-  static const double navigationZoom = 18.0;
-  static const double navigationPitch = 60.0;
-  static const double stepCompletionThreshold = 10.0; // meters
-  static const double deviationThreshold = 50.0; // meters
-  static const double nearLocationThreshold = 100.0; // meters
-  static const int searchDebounceMs = 300;
-  static const int cameraUpdateDebounceMs = 200;
-  static const int positionDistanceFilter = 3; // meters
-  static const int apiTimeoutSeconds = 10;
-  static const Color routeColor = Colors.blue;
-  static const double defaultLat = 14.3295;
-  static const double defaultLng = 120.9385;
-}
+CircleAnnotationManager? circleAnnotationManager;
+PolylineAnnotationManager? polylineAnnotationManager;
+Map<String, String> _annotationToLocationId = {};
 
-// Navigation Step Model
+// ❌ REMOVE THIS DUPLICATE CLASS - Already imported above!
+// Delete lines 17-71 (the CampusLocation class definition)
+
 class NavigationStep {
   final String instruction;
   final double distance;
@@ -57,6 +51,20 @@ class NavigationStep {
   }
 }
 
+// --- 2. CONSTANTS ---
+
+class NavigationConstants {
+  static const double defaultZoom = 16.0;
+  static const double navigationZoom = 18.5;
+  static const double navigationPitch = 60.0;
+  static const double stepCompletionThreshold = 15.0;
+  static const Color routeColor = Color(0xFF007B3E); // DLSU Green
+  static const double defaultLat = 14.3250;
+  static const double defaultLng = 120.9580;
+}
+
+// --- 3. MAIN SCREEN ---
+
 class MapNavigationScreen extends StatefulWidget {
   const MapNavigationScreen({super.key});
 
@@ -66,1362 +74,960 @@ class MapNavigationScreen extends StatefulWidget {
 
 class _MapNavigationScreenState extends State<MapNavigationScreen> {
   MapboxMap? mapboxMap;
-  PointAnnotationManager? pointAnnotationManager;
-  PolylineAnnotationManager? polylineAnnotationManager;
 
   final List<CampusLocation> _allLocations = CampusLocation.allLocations;
   CampusLocation? _destination;
   geolocator.Position? _currentPosition;
-  String _currentLocationName = "DLSU-D Campus";
+  String _currentLocationLabel = "Locating...";
 
-  bool _isPinningMode = false;
   bool _isCalculatingRoute = false;
   bool _isNavigating = false;
-  bool _isGettingLocation = true;
 
   double? _routeDistance;
   double? _routeDuration;
-
-  // Turn-by-turn navigation
   List<NavigationStep> _navigationSteps = [];
-  List<Position> _routeCoordinates = [];
   int _currentStepIndex = 0;
-  StreamSubscription<geolocator.Position>? _positionSubscription;
   double _distanceToNextStep = 0;
-  Timer? _cameraUpdateTimer;
-  Timer? _deviationCheckTimer;
 
-  bool get _isMapReady => mapboxMap != null;
+  StreamSubscription<geolocator.Position>? _positionSubscription;
 
   @override
   void initState() {
     super.initState();
-    _currentPosition = geolocator.Position(
-      longitude: NavigationConstants.defaultLng,
-      latitude: NavigationConstants.defaultLat,
-      timestamp: DateTime.now(),
-      accuracy: 0,
-      altitude: 0,
-      altitudeAccuracy: 0,
-      heading: 0,
-      headingAccuracy: 0,
-      speed: 0,
-      speedAccuracy: 0,
-    );
     _initializeUserLocation();
   }
 
   @override
   void dispose() {
     _positionSubscription?.cancel();
-    _cameraUpdateTimer?.cancel();
-    _deviationCheckTimer?.cancel();
+    circleAnnotationManager?.deleteAll();
     pointAnnotationManager?.deleteAll();
     polylineAnnotationManager?.deleteAll();
-    mapboxMap?.dispose();
     super.dispose();
   }
 
-  Future<void> _initializeUserLocation() async {
-    final hasPermission = await _handleLocationPermission();
-    if (!hasPermission) {
-      if (mounted) {
-        setState(() => _isGettingLocation = false);
-        _showError(
-          'Location permission required',
-          action: SnackBarAction(
-            label: 'Settings',
-            onPressed: () => geolocator.Geolocator.openLocationSettings(),
-          ),
-        );
-      }
-      return;
-    }
+  // --- MAP LOGIC ---
+  CircleAnnotationManager? circleAnnotationManager; // Fallback
+  PointAnnotationManager? pointAnnotationManager;   // For images
 
-    try {
-      final position = await geolocator.Geolocator.getCurrentPosition(
-        locationSettings: const geolocator.LocationSettings(
-          accuracy: geolocator.LocationAccuracy.high,
-          timeLimit: Duration(seconds: NavigationConstants.apiTimeoutSeconds),
-        ),
-      );
-      if (mounted) {
-        setState(() {
-          _currentPosition = position;
-          _isGettingLocation = false;
-        });
-        mapboxMap?.flyTo(
-          CameraOptions(
-            center: Point(coordinates: Position(position.longitude, position.latitude)),
-            zoom: NavigationConstants.defaultZoom,
-          ),
-          MapAnimationOptions(duration: 1000),
-        );
-        _updateLocationName(position);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isGettingLocation = false);
-        _showError('Failed to get location: ${e.toString()}');
-      }
-    }
-  }
-
-  Future<void> _updateLocationName(geolocator.Position position) async {
-    CampusLocation? nearestCampus = _findNearestCampusLocation(position);
-    if (nearestCampus != null) {
-      setState(() => _currentLocationName = nearestCampus.name);
-      return;
-    }
-
-    final String? accessToken = await _getApiToken();
-    if (accessToken == null) {
-      setState(() => _currentLocationName = "Current Location");
-      return;
-    }
-
-    try {
-      final url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/'
-          '${position.longitude},${position.latitude}.json'
-          '?access_token=$accessToken&limit=1';
-
-      final response = await http.get(Uri.parse(url)).timeout(
-        const Duration(seconds: NavigationConstants.apiTimeoutSeconds),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['features'] != null && data['features'].isNotEmpty) {
-          final placeName = data['features'][0]['text'] ?? "Current Location";
-          if (mounted) setState(() => _currentLocationName = placeName);
-        }
-      }
-    } catch (e) {
-      if (mounted) setState(() => _currentLocationName = "Current Location");
-    }
-  }
-
-  CampusLocation? _findNearestCampusLocation(geolocator.Position position) {
-    double minDistance = double.infinity;
-    CampusLocation? nearest;
-
-    for (var location in _allLocations) {
-      double distance = geolocator.Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
-        location.latitude,
-        location.longitude,
-      );
-      if (distance < minDistance && distance < NavigationConstants.nearLocationThreshold) {
-        minDistance = distance;
-        nearest = location;
-      }
-    }
-    return nearest;
-  }
+// UPDATE _onMapCreated to create BOTH managers:
 
   void _onMapCreated(MapboxMap mapboxMap) async {
     this.mapboxMap = mapboxMap;
+
+    await _enable3DBuildings();
+
+    // Create BOTH annotation managers
+    circleAnnotationManager = await mapboxMap.annotations.createCircleAnnotationManager();
     pointAnnotationManager = await mapboxMap.annotations.createPointAnnotationManager();
     polylineAnnotationManager = await mapboxMap.annotations.createPolylineAnnotationManager();
-    mapboxMap.location.updateSettings(
-      LocationComponentSettings(enabled: true, pulsingEnabled: true),
+
+    await mapboxMap.location.updateSettings(
+      LocationComponentSettings(
+        enabled: true,
+        pulsingEnabled: true,
+        pulsingColor: Colors.blueAccent.value,
+      ),
     );
-    _updateRouteAndMarkers();
+
+    _loadLocationMarkers();
+
+    mapboxMap.gestures.addOnMapTapListener((MapContentGestureContext context) {
+      _handleMapTap(context.point);
+    });
+  }
+  // --- FEATURE: 3D BUILDINGS (FIXED TYPE ERROR) ---
+  Future<void> _enable3DBuildings() async {
+    if (mapboxMap == null) return;
+
+    try {
+      final style = mapboxMap!.style;
+
+      if (await style.styleLayerExists("3d-buildings")) return;
+
+      // 1. Create layer with placeholders (to satisfy strict double type checks)
+      var fillExtrusionLayer = FillExtrusionLayer(
+        id: "3d-buildings",
+        sourceId: "composite",
+        sourceLayer: "building",
+        minZoom: 15.0, // OPTIMIZATION: Only render when zoomed in
+        fillExtrusionColor: Colors.grey[300]!.value, // Neutral building color
+        fillExtrusionOpacity: 0.9,
+      );
+
+      // 2. Add the layer
+      await style.addLayer(fillExtrusionLayer);
+
+      // 3. Apply the expressions dynamically using raw JSON properties
+      // This bypasses the strict 'double' type requirement of the Dart class
+      await style.setStyleLayerProperty("3d-buildings", "fill-extrusion-height", ["get", "height"]);
+      await style.setStyleLayerProperty("3d-buildings", "fill-extrusion-base", ["get", "min_height"]);
+
+    } catch (e) {
+      debugPrint("Failed to enable 3D buildings: $e");
+    }
   }
 
-  Future<bool> _handleLocationPermission() async {
-    bool serviceEnabled = await geolocator.Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      _showError('Location services are disabled');
-      return false;
+  Future<void> _loadLocationMarkers() async {
+    if (pointAnnotationManager == null || circleAnnotationManager == null) {
+      debugPrint('❌ Annotation managers not ready');
+      return;
     }
 
-    geolocator.LocationPermission permission = await geolocator.Geolocator.checkPermission();
-    if (permission == geolocator.LocationPermission.denied) {
-      permission = await geolocator.Geolocator.requestPermission();
-      if (permission == geolocator.LocationPermission.denied) {
-        _showError('Location permission denied');
-        return false;
+    await pointAnnotationManager!.deleteAll();
+    await circleAnnotationManager!.deleteAll();
+
+    debugPrint('✅ Loading ${_allLocations.length} markers...');
+
+    for (var location in _allLocations) {
+      bool imageLoaded = false;
+
+      // Try to load image marker first
+      if (location.imagePaths.isNotEmpty) {
+        Uint8List? imageBytes = await _loadImageAsBytes(location.mainImage);
+
+        if (imageBytes != null) {
+          try {
+            await pointAnnotationManager!.create(
+              PointAnnotationOptions(
+                geometry: Point(
+                  coordinates: Position(location.longitude, location.latitude),
+                ),
+                image: imageBytes,
+                iconSize: 0.25,
+                iconAnchor: IconAnchor.BOTTOM,
+              ),
+            );
+            imageLoaded = true;
+            debugPrint('✅ Image marker: ${location.name}');
+          } catch (e) {
+            debugPrint('⚠️ Image marker failed for ${location.name}: $e');
+          }
+        }
+      }
+
+      // Fallback to circle if image failed or doesn't exist
+      if (!imageLoaded) {
+        await circleAnnotationManager!.create(
+          CircleAnnotationOptions(
+            geometry: Point(
+              coordinates: Position(location.longitude, location.latitude),
+            ),
+            circleColor: Colors.red.value,
+            circleRadius: 12.0,
+            circleStrokeWidth: 3.0,
+            circleStrokeColor: Colors.white.value,
+          ),
+        );
+        debugPrint('🔴 Circle marker (fallback): ${location.name}');
       }
     }
-    if (permission == geolocator.LocationPermission.deniedForever) {
-      _showError(
-        'Location permission permanently denied',
-        action: SnackBarAction(
-          label: 'Settings',
-          onPressed: () => geolocator.Geolocator.openAppSettings(),
-        ),
+
+    debugPrint('✅ All markers loaded');
+  }
+  // ADD this helper method to load images:
+  Future<Uint8List?> _loadImageAsBytes(String assetPath) async {
+    try {
+      debugPrint('   🔄 Loading image from: $assetPath');
+
+      // Load the asset as ByteData
+      final ByteData data = await rootBundle.load(assetPath);
+      debugPrint('   ✅ Asset loaded: ${data.lengthInBytes} bytes');
+
+      // Decode to image
+      final ui.Codec codec = await ui.instantiateImageCodec(
+        data.buffer.asUint8List(),
+        targetWidth: 150, // Increased resolution
+        targetHeight: 150,
       );
-      return false;
+
+      final ui.FrameInfo frameInfo = await codec.getNextFrame();
+      final ui.Image image = frameInfo.image;
+      debugPrint('   ✅ Image decoded: ${image.width}x${image.height}');
+
+      // Convert to PNG bytes
+      final ByteData? byteData = await image.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
+      if (byteData == null) {
+        debugPrint('   ❌ Failed to convert image to PNG bytes');
+        return null;
+      }
+
+      debugPrint('   ✅ Image converted to PNG: ${byteData.lengthInBytes} bytes');
+      return byteData.buffer.asUint8List();
+
+    } catch (e) {
+      debugPrint('   ❌ Error loading image $assetPath: $e');
+      return null;
     }
-    return true;
   }
 
-  void _updateRouteAndMarkers() {
-    _updateDestinationMarker();
-    if (_destination != null) {
-      _drawRoute();
-    } else {
-      polylineAnnotationManager?.deleteAll();
+
+  void _handleMapTap(Point coordinate) {
+    CampusLocation? closestMatch;
+    double shortestDistance = double.infinity;
+    const double hitThreshold = 120.0; // Generous hit area
+
+    for (var location in _allLocations) {
+      final distance = geolocator.Geolocator.distanceBetween(
+        coordinate.coordinates.lat.toDouble(),
+        coordinate.coordinates.lng.toDouble(),
+        location.latitude,
+        location.longitude,
+      );
+
+      if (distance < hitThreshold && distance < shortestDistance) {
+        shortestDistance = distance;
+        closestMatch = location;
+      }
+    }
+
+    if (closestMatch != null) {
       setState(() {
-        _routeDistance = null;
-        _routeDuration = null;
-        _navigationSteps = [];
-        _routeCoordinates = [];
+        _destination = closestMatch;
+      });
+      _drawRoute();
+
+      if (Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+      _openSearchSheet();
+    }
+  }
+
+  void _updateNearestLocationLabel(geolocator.Position position) {
+    if (_allLocations.isEmpty) return;
+
+    CampusLocation? nearest;
+    double minDistance = double.infinity;
+
+    for (var loc in _allLocations) {
+      double dist = geolocator.Geolocator.distanceBetween(
+          position.latitude, position.longitude, loc.latitude, loc.longitude
+      );
+      if (dist < minDistance) {
+        minDistance = dist;
+        nearest = loc;
+      }
+    }
+
+    String label;
+    if (nearest != null && minDistance < 100) {
+      label = "Near ${nearest.name}";
+    } else {
+      label = "Current Location";
+    }
+
+    if (mounted && label != _currentLocationLabel) {
+      setState(() {
+        _currentLocationLabel = label;
       });
     }
   }
 
-  void _updateDestinationMarker() {
-    pointAnnotationManager?.deleteAll();
-    if (_destination != null) {
-      pointAnnotationManager?.create(PointAnnotationOptions(
-        geometry: Point(
-          coordinates: Position(_destination!.longitude, _destination!.latitude),
-        ),
-        iconColor: Colors.red.value,
-        iconSize: 1.5,
-      ));
+  Future<void> _initializeUserLocation() async {
+    bool serviceEnabled = await geolocator.Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    geolocator.LocationPermission permission = await geolocator.Geolocator.checkPermission();
+    if (permission == geolocator.LocationPermission.denied) {
+      permission = await geolocator.Geolocator.requestPermission();
+      if (permission == geolocator.LocationPermission.denied) return;
+    }
+
+    final position = await geolocator.Geolocator.getCurrentPosition();
+    if (mounted) {
+      setState(() => _currentPosition = position);
+      _updateNearestLocationLabel(position);
+
+      mapboxMap?.flyTo(
+          CameraOptions(
+            center: Point(coordinates: Position(position.longitude, position.latitude)),
+            zoom: NavigationConstants.defaultZoom,
+            pitch: NavigationConstants.navigationPitch,
+          ),
+          MapAnimationOptions(duration: 1000)
+      );
     }
   }
 
+  // --- ROUTING ---
+
   Future<void> _drawRoute() async {
-    polylineAnnotationManager?.deleteAll();
-    setState(() {
-      _isCalculatingRoute = true;
-      _routeDistance = null;
-      _routeDuration = null;
-      _navigationSteps = [];
-      _routeCoordinates = [];
-    });
+    if (_currentPosition == null || _destination == null) return;
 
-    if (_currentPosition == null || _destination == null) {
-      setState(() => _isCalculatingRoute = false);
-      return;
-    }
+    await polylineAnnotationManager?.deleteAll();
+    setState(() => _isCalculatingRoute = true);
 
-    final String? accessToken = await _getApiToken();
-    if (accessToken == null) {
-      setState(() => _isCalculatingRoute = false);
-      _showError('Mapbox API token not configured');
-      return;
-    }
+    final String? accessToken = dotenv.env['MAPBOX_ACCESS_TOKEN'];
+    if (accessToken == null) return;
 
     final String url =
         'https://api.mapbox.com/directions/v5/mapbox/walking/'
         '${_currentPosition!.longitude},${_currentPosition!.latitude};'
         '${_destination!.longitude},${_destination!.latitude}'
-        '?geometries=geojson&steps=true&voice_instructions=true&banner_instructions=true'
-        '&access_token=$accessToken';
+        '?geometries=geojson&steps=true&overview=full&access_token=$accessToken';
 
     try {
-      final response = await http.get(Uri.parse(url)).timeout(
-        const Duration(seconds: NavigationConstants.apiTimeoutSeconds),
-      );
-
+      final response = await http.get(Uri.parse(url));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        if (data['routes'] != null && data['routes'].isNotEmpty) {
+        if (data['routes'].isNotEmpty) {
           final route = data['routes'][0];
-          final List<dynamic> coordinates = route['geometry']['coordinates'];
-          final List<Position> routeCoordinates =
-          coordinates.map((c) => Position(c[0], c[1])).toList();
+          final geometry = route['geometry'];
+          final List<dynamic> coords = geometry['coordinates'];
+          final List<Position> routeCoords = coords.map((c) => Position(c[0], c[1])).toList();
 
-          polylineAnnotationManager?.create(PolylineAnnotationOptions(
-            geometry: LineString(coordinates: routeCoordinates),
+          await polylineAnnotationManager?.create(PolylineAnnotationOptions(
+            geometry: LineString(coordinates: routeCoords),
             lineColor: NavigationConstants.routeColor.value,
-            lineWidth: 6,
-            lineOpacity: 0.9,
+            lineWidth: 6.0,
+            lineJoin: LineJoin.ROUND,
           ));
 
-          // Parse navigation steps
           List<NavigationStep> steps = [];
-          if (route['legs'] != null && route['legs'].isNotEmpty) {
+          if (route['legs'].isNotEmpty) {
             for (var step in route['legs'][0]['steps']) {
               steps.add(NavigationStep.fromJson(step));
             }
           }
 
-          _fitMapToRoute(routeCoordinates);
+          _fitMapToRoute(routeCoords);
 
           if (mounted) {
             setState(() {
-              _routeDistance = route['distance'] / 1000;
-              _routeDuration = route['duration'] / 60;
+              _routeDistance = (route['distance'] / 1000);
+              _routeDuration = (route['duration'] / 60);
               _navigationSteps = steps;
-              _routeCoordinates = routeCoordinates;
               _isCalculatingRoute = false;
             });
           }
-        } else {
-          throw Exception('No routes found');
         }
-      } else {
-        throw Exception('API Error: ${response.statusCode}');
-      }
-    } on TimeoutException {
-      if (mounted) {
-        setState(() => _isCalculatingRoute = false);
-        _showError('Request timed out. Please check your connection.');
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isCalculatingRoute = false);
-        _showError(
-          'Error calculating route: ${e.toString()}',
-          action: SnackBarAction(label: 'Retry', onPressed: _drawRoute),
-        );
-      }
+      setState(() => _isCalculatingRoute = false);
     }
   }
 
-  void _fitMapToRoute(List<Position> routeCoordinates) async {
-    if (mapboxMap == null || routeCoordinates.length < 2) return;
-
+  void _fitMapToRoute(List<Position> coords) async {
+    if (mapboxMap == null || coords.isEmpty) return;
     final cameraOptions = await mapboxMap!.cameraForCoordinates(
-      routeCoordinates.map((c) => Point(coordinates: c)).toList(),
-      MbxEdgeInsets(top: 150.0, left: 50.0, bottom: 300.0, right: 50.0),
-      null,
-      null,
+        coords.map((e) => Point(coordinates: e)).toList(),
+        MbxEdgeInsets(top: 150, left: 50, bottom: 350, right: 50),
+        NavigationConstants.navigationPitch,
+        null
     );
-    mapboxMap!.flyTo(cameraOptions, MapAnimationOptions(duration: 1500));
+    mapboxMap!.flyTo(cameraOptions, MapAnimationOptions(duration: 1000));
   }
 
-  void _startNavigation() {
-    if (_destination == null || _currentPosition == null) return;
+  // --- NAVIGATION EXECUTION ---
 
-    _positionSubscription?.cancel();
-    _cameraUpdateTimer?.cancel();
-    _deviationCheckTimer?.cancel();
+  void _startNavigation() {
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
 
     setState(() {
       _isNavigating = true;
       _currentStepIndex = 0;
     });
-    HapticFeedback.mediumImpact();
 
-    // Calculate initial bearing
-    double bearing = 0;
-    if (_navigationSteps.isNotEmpty) {
-      bearing = geolocator.Geolocator.bearingBetween(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
-        _navigationSteps[0].latitude,
-        _navigationSteps[0].longitude,
-      );
-      _distanceToNextStep = geolocator.Geolocator.distanceBetween(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
-        _navigationSteps[0].latitude,
-        _navigationSteps[0].longitude,
-      );
-    } else {
-      bearing = geolocator.Geolocator.bearingBetween(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
-        _destination!.latitude,
-        _destination!.longitude,
-      );
-    }
-
-    // Center camera on user facing the route direction
-    mapboxMap?.flyTo(
-      CameraOptions(
-        center: Point(
-          coordinates: Position(_currentPosition!.longitude, _currentPosition!.latitude),
-        ),
-        zoom: NavigationConstants.navigationZoom,
-        pitch: NavigationConstants.navigationPitch,
-        bearing: bearing,
-      ),
-      MapAnimationOptions(duration: 1000),
-    );
-
-    // Start listening to position updates
+    _positionSubscription?.cancel();
     _positionSubscription = geolocator.Geolocator.getPositionStream(
       locationSettings: const geolocator.LocationSettings(
-        accuracy: geolocator.LocationAccuracy.high,
-        distanceFilter: NavigationConstants.positionDistanceFilter,
+        accuracy: geolocator.LocationAccuracy.bestForNavigation,
+        distanceFilter: 2,
       ),
-    ).listen(
-      _onPositionUpdate,
-      onError: (error) {
-        _showError('Location tracking error: ${error.toString()}');
-        _stopNavigation();
-      },
-    );
+    ).listen((pos) {
+      if (!_isNavigating) return;
+      _currentPosition = pos;
+      _updateNearestLocationLabel(pos);
 
-    // Start deviation checking
-    _deviationCheckTimer = Timer.periodic(
-      const Duration(seconds: 5),
-          (_) => _checkForDeviation(),
-    );
-  }
-
-  void _onPositionUpdate(geolocator.Position position) {
-    if (!_isNavigating) return;
-
-    setState(() => _currentPosition = position);
-
-    // If no steps or completed all steps
-    if (_navigationSteps.isEmpty || _currentStepIndex >= _navigationSteps.length) {
-      _updateCameraDebounced(position, position.heading);
-      return;
-    }
-
-    final currentStep = _navigationSteps[_currentStepIndex];
-
-    // Calculate distance to current step
-    final distance = geolocator.Geolocator.distanceBetween(
-      position.latitude,
-      position.longitude,
-      currentStep.latitude,
-      currentStep.longitude,
-    );
-
-    setState(() => _distanceToNextStep = distance);
-
-    // Calculate bearing to next step for camera
-    double bearing = geolocator.Geolocator.bearingBetween(
-      position.latitude,
-      position.longitude,
-      currentStep.latitude,
-      currentStep.longitude,
-    );
-
-    // Update camera with debouncing
-    _updateCameraDebounced(position, bearing);
-
-    // Check if reached current step
-    if (distance < NavigationConstants.stepCompletionThreshold) {
-      HapticFeedback.lightImpact();
-      setState(() => _currentStepIndex++);
-
-      if (_currentStepIndex >= _navigationSteps.length) {
-        _onArrived();
-      }
-    }
-  }
-
-  void _updateCameraDebounced(geolocator.Position position, double bearing) {
-    _cameraUpdateTimer?.cancel();
-    _cameraUpdateTimer = Timer(
-      const Duration(milliseconds: NavigationConstants.cameraUpdateDebounceMs),
-          () {
-        mapboxMap?.flyTo(
-          CameraOptions(
-            center: Point(coordinates: Position(position.longitude, position.latitude)),
-            zoom: NavigationConstants.navigationZoom,
-            pitch: NavigationConstants.navigationPitch,
-            bearing: bearing,
-          ),
-          MapAnimationOptions(duration: 500),
-        );
-      },
-    );
-  }
-
-  void _checkForDeviation() {
-    if (!_isNavigating || _routeCoordinates.isEmpty || _currentPosition == null) {
-      return;
-    }
-
-    double minDistance = double.infinity;
-    for (var coord in _routeCoordinates) {
-      final dist = geolocator.Geolocator.distanceBetween(
-        _currentPosition!.latitude,
-        _currentPosition!.longitude,
-        coord.lat.toDouble(),
-        coord.lng.toDouble(),
-      );
-      if (dist < minDistance) minDistance = dist;
-    }
-
-    // If more than threshold from route, recalculate
-    if (minDistance > NavigationConstants.deviationThreshold) {
-      _recalculateRoute();
-    }
-  }
-
-  void _recalculateRoute() async {
-    if (!_isNavigating) return;
-
-    HapticFeedback.lightImpact();
-    _showError('Recalculating route...', duration: 2);
-
-    await _drawRoute();
-
-    // Reset step index if route changed
-    if (_navigationSteps.isNotEmpty && mounted) {
-      setState(() => _currentStepIndex = 0);
-    }
-  }
-
-  void _onArrived() {
-    HapticFeedback.heavyImpact();
-    _stopNavigation();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.green, size: 28),
-            SizedBox(width: 8),
-            Text('Arrived!'),
-          ],
+      mapboxMap?.flyTo(
+        CameraOptions(
+          center: Point(coordinates: Position(pos.longitude, pos.latitude)),
+          zoom: NavigationConstants.navigationZoom,
+          bearing: pos.heading,
+          pitch: NavigationConstants.navigationPitch,
         ),
-        content: Text('You have arrived at ${_destination?.name ?? "your destination"}.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+        MapAnimationOptions(duration: 500),
+      );
+
+      if (_navigationSteps.isNotEmpty && _currentStepIndex < _navigationSteps.length) {
+        final step = _navigationSteps[_currentStepIndex];
+        final dist = geolocator.Geolocator.distanceBetween(
+            pos.latitude, pos.longitude, step.latitude, step.longitude
+        );
+        setState(() => _distanceToNextStep = dist);
+
+        if (dist < NavigationConstants.stepCompletionThreshold) {
+          setState(() => _currentStepIndex++);
+          if (_currentStepIndex >= _navigationSteps.length) {
+            _stopNavigation();
+            _showArrivalDialog();
+          }
+        }
+      }
+    });
   }
 
   void _stopNavigation() {
     _positionSubscription?.cancel();
-    _positionSubscription = null;
-    _cameraUpdateTimer?.cancel();
-    _cameraUpdateTimer = null;
-    _deviationCheckTimer?.cancel();
-    _deviationCheckTimer = null;
-
-    if (mounted) {
-      setState(() {
-        _isNavigating = false;
-        _currentStepIndex = 0;
-      });
-
-      if (_currentPosition != null) {
-        mapboxMap?.flyTo(
-          CameraOptions(
-            center: Point(
-              coordinates: Position(_currentPosition!.longitude, _currentPosition!.latitude),
-            ),
+    setState(() => _isNavigating = false);
+    mapboxMap?.flyTo(
+        CameraOptions(
             zoom: NavigationConstants.defaultZoom,
-            pitch: 0,
-            bearing: 0,
-          ),
-          MapAnimationOptions(duration: 1000),
-        );
-      }
-    }
-  }
-
-  void _confirmPinDrop() async {
-    if (mapboxMap == null) return;
-    final center = await mapboxMap!.getCameraState();
-
-    final newDestination = CampusLocation(
-      id: DateTime.now().toIso8601String(),
-      name: 'Pinned Location',
-      description: 'Custom selected point',
-      latitude: center.center.coordinates.lat.toDouble(),
-      longitude: center.center.coordinates.lng.toDouble(),
-      icon: Icons.push_pin,
-    );
-
-    setState(() {
-      _destination = newDestination;
-      _isPinningMode = false;
-    });
-    _updateRouteAndMarkers();
-    HapticFeedback.mediumImpact();
-  }
-
-  IconData _getManeuverIcon(String maneuver) {
-    switch (maneuver.toLowerCase()) {
-      case 'turn-right':
-      case 'right':
-        return Icons.turn_right;
-      case 'turn-left':
-      case 'left':
-        return Icons.turn_left;
-      case 'straight':
-      case 'continue':
-        return Icons.straight;
-      case 'arrive':
-        return Icons.flag;
-      case 'depart':
-        return Icons.navigation;
-      default:
-        return Icons.arrow_upward;
-    }
-  }
-
-  String _formatDistance(double meters) {
-    if (meters < 1000) {
-      return '${meters.toStringAsFixed(0)} m';
-    }
-    return '${(meters / 1000).toStringAsFixed(1)} km';
-  }
-
-  Future<String?> _getApiToken() async {
-    final token = dotenv.env['MAPBOX_ACCESS_TOKEN'];
-    if (token == null || token.isEmpty) {
-      return null;
-    }
-    return token;
-  }
-
-  void _showError(String message, {SnackBarAction? action, int duration = 4}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        action: action,
-        duration: Duration(seconds: duration),
-      ),
+            pitch: NavigationConstants.navigationPitch,
+            bearing: 0
+        ),
+        MapAnimationOptions(duration: 1000)
     );
   }
+
+  void _showArrivalDialog() {
+    showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text("Arrived!"),
+          content: Text("You have reached ${_destination?.name}"),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK"))],
+        )
+    );
+  }
+
+  // --- UI BUILD ---
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),onPressed: () async {
-          // Properly dispose Mapbox resources before leaving
-          mapboxMap?.dispose();
-
-          // Also dispose annotation managers if needed
-          await pointAnnotationManager?.deleteAll();
-          await polylineAnnotationManager?.deleteAll();
-
-          if (mounted) Navigator.of(context).pop();
-        },
-        ),
-        title: Text(_isNavigating ? 'Navigating' : 'DLSU-D Campus'),
-        actions: [
-          if (_isGettingLocation)
-            const Padding(
-              padding: EdgeInsets.all(16.0),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              ),
-            ),
-          if (_isNavigating)
-            TextButton(
-              onPressed: _stopNavigation,
-              child: const Text(
-                'Stop',
-                style: TextStyle(color: Colors.red),
-              ),
-            ),
-        ],
-      ),
+      extendBodyBehindAppBar: true,
       body: Stack(
         children: [
+          // 1. MAP
           MapWidget(
             onMapCreated: _onMapCreated,
+            styleUri: MapboxStyles.OUTDOORS,
             cameraOptions: CameraOptions(
-              center: Point(
-                coordinates: Position(
-                  _currentPosition!.longitude,
-                  _currentPosition!.latitude,
-                ),
-              ),
+              center: Point(coordinates: Position(NavigationConstants.defaultLng, NavigationConstants.defaultLat)),
               zoom: NavigationConstants.defaultZoom,
+              pitch: NavigationConstants.navigationPitch,
             ),
           ),
-          if (_isNavigating &&
-              _navigationSteps.isNotEmpty &&
-              _currentStepIndex < _navigationSteps.length)
-            _buildNavigationDirectionCard(),
-          if (!_isPinningMode && !_isNavigating) _buildRoutePlannerOverlay(),
-          if (_isPinningMode) _buildPinningModeUI(),
-          if (_routeDuration != null && _routeDistance != null && !_isPinningMode)
-            _buildRouteInfoCard(),
-          if (_isCalculatingRoute) _buildLoadingOverlay(),
-        ],
-      ),
-      floatingActionButton: _isMapReady && !_isPinningMode
-          ? FloatingActionButton(
-        onPressed: () {
-          double bearing = 0;
-          if (_isNavigating &&
-              _currentStepIndex < _navigationSteps.length &&
-              _currentPosition != null) {
-            bearing = geolocator.Geolocator.bearingBetween(
-              _currentPosition!.latitude,
-              _currentPosition!.longitude,
-              _navigationSteps[_currentStepIndex].latitude,
-              _navigationSteps[_currentStepIndex].longitude,
-            );
-          }
-          mapboxMap?.flyTo(
-            CameraOptions(
-              center: Point(
-                coordinates: Position(
-                  _currentPosition!.longitude,
-                  _currentPosition!.latitude,
-                ),
-              ),
-              zoom: _isNavigating
-                  ? NavigationConstants.navigationZoom
-                  : NavigationConstants.defaultZoom,
-              pitch: _isNavigating ? NavigationConstants.navigationPitch : 0,
-              bearing: bearing,
-            ),
-            MapAnimationOptions(duration: 1000),
-          );
-        },
-        child: const Icon(Icons.my_location),
-      )
-          : null,
-    );
-  }
 
-  Widget _buildLoadingOverlay() {
-    return const Positioned.fill(
-      child: ColoredBox(
-        color: Colors.black26,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text(
-                'Calculating route...',
-                style: TextStyle(
+
+          // 3. TOP CENTER "YOUR LOCATION" PILL
+          Positioned(
+            top: 50,
+            left: 70,
+            right: 70,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
                   color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNavigationDirectionCard() {
-    final step = _navigationSteps[_currentStepIndex];
-    final nextStep = _currentStepIndex + 1 < _navigationSteps.length
-        ? _navigationSteps[_currentStepIndex + 1]
-        : null;
-
-    return Positioned(
-      top: 0,
-      left: 0,
-      right: 0,
-      child: SafeArea(
-        child: Card(
-          margin: const EdgeInsets.all(12),
-          elevation: 8,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Colors.green,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: BorderRadius.circular(30),
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0,2))],
                 ),
                 child: Row(
-                  children: [
-                    Icon(
-                      _getManeuverIcon(step.maneuver),
-                      size: 48,
-                      color: Colors.white,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _formatDistance(_distanceToNextStep),
-                            style: const TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                          Text(
-                            step.instruction,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.white,
-                            ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (nextStep != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      const Text(
-                        'Then ',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                      Icon(
-                        _getManeuverIcon(nextStep.maneuver),
-                        size: 20,
-                        color: Colors.grey,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          nextStep.instruction,
-                          style: const TextStyle(
-                            color: Colors.grey,
-                            fontSize: 14,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPinningModeUI() {
-    return Stack(
-      children: [
-        const Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.place, size: 40, color: Colors.red),
-              SizedBox(height: 8),
-              Text(
-                'Drag the map to position the pin',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Positioned(
-          bottom: 32,
-          left: 16,
-          right: 16,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              ElevatedButton(
-                onPressed: () => setState(() => _isPinningMode = false),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey,
-                ),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: _confirmPinDrop,
-                child: const Text('Confirm Destination'),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRoutePlannerOverlay() {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          children: [
-            Card(
-              elevation: 4,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16.0,
-                  vertical: 8.0,
-                ),
-                child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8.0, left: 4.0),
+                    const Icon(Icons.my_location, color: Colors.blue, size: 16),
+                    const SizedBox(width: 8),
+                    Flexible(
                       child: Text(
-                        'Your Location',
-                        style: TextStyle(
-                          color: Colors.black54,
-                          fontSize: 12,
+                        _currentLocationLabel,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: Colors.black87
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    _buildLocationDisplay(),
-                    const Divider(height: 1),
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8.0, left: 4.0),
-                      child: Text(
-                        'Destination',
-                        style: TextStyle(
-                          color: Colors.black54,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildLocationSelector(
-                            location: _destination,
-                            onTap: () {
-                              if (_isMapReady) _showLocationSelection();
-                            },
-                          ),
-                        ),
-                        if (_destination != null)
-                          IconButton(
-                            onPressed: () {
-                              setState(() {
-                                _destination = null;
-                                _routeDistance = null;
-                                _routeDuration = null;
-                                _navigationSteps = [];
-                                _routeCoordinates = [];
-                              });
-                              polylineAnnotationManager?.deleteAll();
-                              pointAnnotationManager?.deleteAll();
-                            },
-                            icon: const Icon(Icons.clear),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
                   ],
                 ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLocationDisplay() {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12.0),
-      child: Row(
-        children: [
-          const Icon(Icons.my_location, color: Colors.green),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              _currentLocationName,
-              style: const TextStyle(fontSize: 16),
-              overflow: TextOverflow.ellipsis,
-            ),
           ),
+
+          // 4. BOTTOM LEFT SEARCH BUTTON
+          if (!_isNavigating)
+            Positioned(
+              bottom: 30,
+              left: 20,
+              child: FloatingActionButton(
+                heroTag: "searchBtn",
+                backgroundColor: Colors.white,
+                onPressed: _openSearchSheet,
+                child: const Icon(Icons.search, color: Colors.black87),
+              ),
+            ),
+
+          // 5. NAVIGATION HUD
+          if (_isNavigating) _buildNavigationHUD(),
+
+          // 6. LOADING
+          if (_isCalculatingRoute) const Center(child: CircularProgressIndicator()),
         ],
       ),
-    );
-  }
 
-  Widget _buildRouteInfoCard() {
-    return Positioned(
-      bottom: 16,
-      left: 16,
-      right: 16,
-      child: Card(
-        elevation: 4,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildInfoColumn(
-                    Icons.directions_walk,
-                    '${_routeDuration?.toStringAsFixed(0)} min',
-                    'Duration',
-                  ),
-                  _buildInfoColumn(
-                    Icons.map,
-                    '${_routeDistance?.toStringAsFixed(2)} km',
-                    'Distance',
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              if (!_isNavigating)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _navigationSteps.isNotEmpty ? _startNavigation : null,
-                    icon: const Icon(Icons.navigation),
-                    label: const Text('Start Navigation'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _stopNavigation,
-                    icon: const Icon(Icons.stop),
-                    label: const Text('Stop Navigation'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
+      // 7. MY LOCATION FAB
+      floatingActionButton: (!_isNavigating) ? FloatingActionButton(
+        heroTag: "myLocBtn",
+        backgroundColor: Colors.white,
+        child: const Icon(Icons.gps_fixed, color: Colors.green),
+        onPressed: () {
+          if (_currentPosition != null) {
+            mapboxMap?.flyTo(
+                CameraOptions(
+                  center: Point(coordinates: Position(_currentPosition!.longitude, _currentPosition!.latitude)),
+                  zoom: 17,
+                  pitch: NavigationConstants.navigationPitch,
                 ),
-            ],
-          ),
-        ),
-      ),
+                MapAnimationOptions(duration: 1000)
+            );
+          }
+        },
+      ) : null,
     );
   }
 
-  Widget _buildInfoColumn(IconData icon, String value, String label) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: Colors.green, size: 28),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.grey,
-            fontSize: 12,
-          ),
-        ),
-      ],
-    );
-  }
+  // --- SLIDE-IN SHEET LOGIC ---
 
-  Widget _buildLocationSelector({
-    CampusLocation? location,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12.0),
-        child: Row(
-          children: [
-            Icon(
-              Icons.place,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                location?.name ?? "Select destination",
-                style: TextStyle(
-                  color: _isMapReady ? Colors.black : Colors.grey,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showLocationSelection() {
+  void _openSearchSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
+      isDismissible: true,
+      enableDrag: true,
       builder: (context) => DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.8,
-        maxChildSize: 0.9,
-        builder: (BuildContext context, ScrollController scrollController) {
-          return LocationSearchSheet(
-            proximity: _currentPosition,
-            allCampusLocations: _allLocations,
-            onLocationSelected: (location) {
-              final wasNavigating = _isNavigating;
-              if (wasNavigating) {
-                _positionSubscription?.cancel();
+        initialChildSize: 0.6,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) {
+          return StatefulBuilder(
+              builder: (BuildContext context, StateSetter setSheetState) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  ),
+                  child: Column(
+                    children: [
+                      // Drag Handle
+                      Center(
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 12, bottom: 8),
+                          width: 40,
+                          height: 4,
+                          color: Colors.grey[300],
+                        ),
+                      ),
+
+                      // Content
+                      Expanded(
+                          child: _destination == null
+                              ? _buildPlacesList(scrollController, setSheetState)
+                              : _buildDestinationDetails(scrollController, setSheetState)
+                      ),
+                    ],
+                  ),
+                );
               }
-
-              setState(() {
-                _destination = location;
-                _isNavigating = false;
-                _currentStepIndex = 0;
-                _navigationSteps = [];
-                _routeCoordinates = [];
-              });
-
-              Navigator.pop(context);
-
-              // Update route and wait for completion before restarting navigation
-              _updateRouteAndMarkers();
-
-              if (wasNavigating) {
-                // Delay to allow route calculation to complete
-                Future.delayed(const Duration(milliseconds: 2000), () {
-                  if (_navigationSteps.isNotEmpty && mounted) {
-                    _startNavigation();
-                  }
-                });
-              }
-            },
-            onSelectOnMap: () {
-              Navigator.pop(context);
-              setState(() => _isPinningMode = true);
-            },
           );
         },
       ),
     );
   }
-}
 
-class LocationSearchSheet extends StatefulWidget {
-  final Function(CampusLocation) onLocationSelected;
-  final VoidCallback onSelectOnMap;
-  final geolocator.Position? proximity;
-  final List<CampusLocation> allCampusLocations;
-
-  const LocationSearchSheet({
-    super.key,
-    required this.onLocationSelected,
-    required this.onSelectOnMap,
-    this.proximity,
-    required this.allCampusLocations,
-  });
-
-  @override
-  State<LocationSearchSheet> createState() => _LocationSearchSheetState();
-  
-}
-
-class _LocationSearchSheetState extends State<LocationSearchSheet> {
-  final TextEditingController _searchController = TextEditingController();
-  List<dynamic> _searchResults = [];
-  bool _isLoading = false;
-  Timer? _debounce;
-
-  @override
-  void initState() {
-    super.initState();
-    _searchResults = widget.allCampusLocations;
-    _searchController.addListener(() => _onSearchChanged(_searchController.text));
-  }
-
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    _searchController.dispose();
-
-    super.dispose();
-  }
-
-  void _onSearchChanged(String query) {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-
-    // Immediate search for local results
-    if (query.isEmpty) {
-      setState(() => _searchResults = widget.allCampusLocations);
-      return;
-    }
-
-    final localResults = widget.allCampusLocations
-        .where((loc) => loc.name.toLowerCase().contains(query.toLowerCase()))
-        .toList();
-
-    setState(() => _searchResults = localResults);
-
-    // Debounced API search
-    _debounce = Timer(
-      const Duration(milliseconds: NavigationConstants.searchDebounceMs),
-          () => _performAPISearch(query),
+  Widget _buildPlacesList(ScrollController controller, StateSetter setSheetState) {
+    return Column(
+      children: [
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 50,
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.search, color: Colors.grey),
+              SizedBox(width: 12),
+              Text("Search DLSU-D...", style: TextStyle(color: Colors.grey, fontSize: 16)),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            controller: controller,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: _allLocations.length,
+            separatorBuilder: (ctx, i) => const Divider(height: 1),
+            itemBuilder: (ctx, i) {
+              final loc = _allLocations[i];
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: Icon(loc.icon, color: Colors.green, size: 24),
+                ),
+                title: Text(loc.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(loc.description, maxLines: 1, overflow: TextOverflow.ellipsis),
+                onTap: () {
+                  this.setState(() => _destination = loc);
+                  _drawRoute();
+                  setSheetState(() {});
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  Future<void> _performAPISearch(String query) async {
-    if (query.length < 3) return;
+  // Replace the _buildDestinationDetails method in your MapNavigationScreen
 
-    setState(() => _isLoading = true);
 
-    List<dynamic> combinedResults = List.from(_searchResults);
+  Widget _buildDestinationDetails(ScrollController controller, StateSetter setSheetState) {
+    return Stack(
+      children: [
+        ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+          children: [
+            const SizedBox(height: 40),
 
-    final String? accessToken = dotenv.env['MAPBOX_ACCESS_TOKEN'];
-    if (accessToken != null && accessToken.isNotEmpty) {
-      final proximityStr = widget.proximity != null
-          ? '&proximity=${widget.proximity!.longitude},${widget.proximity!.latitude}'
-          : '';
-
-      final url = 'https://api.mapbox.com/geocoding/v5/mapbox.places/$query.json'
-          '?access_token=$accessToken$proximityStr';
-
-      try {
-        final response = await http.get(Uri.parse(url)).timeout(
-          const Duration(seconds: NavigationConstants.apiTimeoutSeconds),
-        );
-
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
-          final features = data['features'] as List;
-          combinedResults.addAll(
-            features.map((f) => f as Map<String, dynamic>).toList(),
-          );
-        }
-      } on TimeoutException {
-        // Silently handle timeout, show local results only
-      } catch (e) {
-        // Silently handle other errors
-      }
-    }
-
-    if (mounted) {
-      setState(() {
-        _searchResults = combinedResults;
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          const Text(
-            'Select Destination',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 18,
-            ),
-          ),
-          const SizedBox(height: 16),
-          ListTile(
-            leading: const Icon(Icons.push_pin, color: Colors.blue),
-            title: const Text('Select a point on the map'),
-            onTap: widget.onSelectOnMap,
-            tileColor: Colors.blue.withOpacity(0.05),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Search locations...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _isLoading
-                  ? const Padding(
-                padding: EdgeInsets.all(12.0),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                ),
-              )
-                  : null,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Expanded(
-            child: _searchResults.isEmpty
-                ? const Center(
-              child: Text(
-                'No locations found',
-                style: TextStyle(color: Colors.grey),
-              ),
-            )
-                : ListView.builder(
-              itemCount: _searchResults.length,
-              itemBuilder: (context, index) {
-                final result = _searchResults[index];
-                if (result is CampusLocation) {
-                  return ListTile(
-                    leading: Icon(result.icon, color: Colors.green),
-                    title: Text(result.name),
-                    subtitle: Text(result.description),
-                    onTap: () => widget.onLocationSelected(result),
-                  );
-                } else if (result is Map<String, dynamic>) {
-                  final coords = result['center'] as List<dynamic>?;
-                  return ListTile(
-                    leading: const Icon(Icons.place, color: Colors.grey),
-                    title: Text(result['text'] ?? ''),
-                    subtitle: Text(result['place_name'] ?? ''),
-                    onTap: () {
-                      if (coords != null && coords.length >= 2) {
-                        widget.onLocationSelected(
-                          CampusLocation(
-                            id: result['id'] ?? DateTime.now().toIso8601String(),
-                            name: result['text'] ?? '',
-                            description: result['place_name'] ?? '',
-                            latitude: coords[1].toDouble(),
-                            longitude: coords[0].toDouble(),
-                            icon: Icons.place,
-                          ),
-                        );
-                      }
-                    },
+            // 1. IMAGE with Gallery Button
+            GestureDetector(
+              onTap: () {
+                if (_destination!.imagePaths.isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ImageGalleryScreen(
+                        imagePaths: _destination!.imagePaths,
+                        locationName: _destination!.name,
+                        initialIndex: 0,
+                      ),
+                    ),
                   );
                 }
-                return const SizedBox.shrink();
+              },
+              child: Stack(
+                children: [
+                  // Main Image
+                  Container(
+                    height: 220,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _destination!.imagePaths.isNotEmpty
+                          ? Image.asset(
+                        _destination!.mainImage,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stack) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.image_not_supported,
+                                    size: 48,
+                                    color: Colors.grey[400]),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Image not found',
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      )
+                          : Center(
+                        child: Text(
+                          "No Image",
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[400],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Gallery Badge (show if multiple images)
+                  if (_destination!.hasGallery)
+                    Positioned(
+                      bottom: 12,
+                      right: 12,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.photo_library,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${_destination!.imagePaths.length}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Tap Hint Overlay
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.1),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // 2. INFO
+            Text(
+              _destination!.name,
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              _destination!.description,
+              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+
+            // 3. CHIPS
+            Row(
+              children: [
+                _infoPill(Icons.timer, "${_routeDuration?.toStringAsFixed(0) ?? '-'} min"),
+                const SizedBox(width: 16),
+                _infoPill(Icons.straighten, "${_routeDistance?.toStringAsFixed(1) ?? '-'} km"),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // NEW: 4. 360° PANORAMA BUTTON (if available)
+            if (_destination!.hasPanorama)
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PanoramaViewScreen(
+                          imageUrl: _destination!.panoramaUrl!,
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.threesixty, size: 24),
+                  label: const Text(
+                    "View 360° Tour",
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF4CAF50),
+                    side: const BorderSide(color: Color(0xFF4CAF50), width: 2),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+
+
+            if (_destination!.hasPanorama) const SizedBox(height: 16),
+
+            // 5. START NAVIGATION BUTTON
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton.icon(
+                onPressed: _startNavigation,
+                icon: const Icon(Icons.directions_walk, size: 24),
+                label: const Text(
+                  "Start Navigation",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF4CAF50),
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+
+        // 6. POLISHED CLOSE BUTTON (Right)
+        Positioned(
+          right: 16,
+          top: 16,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: Icon(Icons.close, size: 24, color: Colors.grey[700]),
+              onPressed: () {
+                this.setState(() {
+                  _destination = null;
+                  _routeDistance = null;
+                });
+                polylineAnnotationManager?.deleteAll();
+                Navigator.pop(context);
               },
             ),
+          ),
+        ),
+
+        // 7. POLISHED BACK BUTTON (Left) - GOES BACK TO LIST
+        Positioned(
+          left: 16,
+          top: 16,
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.grey[100],
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: Icon(Icons.arrow_back, size: 24, color: Colors.grey[700]),
+              onPressed: () {
+                this.setState(() {
+                  _destination = null;
+                  _routeDistance = null;
+                });
+                polylineAnnotationManager?.deleteAll();
+                setSheetState(() {});
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+
+  Widget _infoPill(IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(30),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: Colors.grey[700]),
+          const SizedBox(width: 8),
+          Text(
+            text,
+            style: TextStyle(color: Colors.grey[800], fontWeight: FontWeight.w500),
           ),
         ],
       ),
     );
   }
+
+  Widget _buildCircleButton({required IconData icon, required VoidCallback onTap}) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.black),
+        onPressed: onTap,
+      ),
+    );
+  }
+
+  Widget _buildNavigationHUD() {
+    if (_navigationSteps.isEmpty || _currentStepIndex >= _navigationSteps.length) return const SizedBox.shrink();
+    final step = _navigationSteps[_currentStepIndex];
+    return Positioned(
+      top: 0, left: 0, right: 0,
+      child: SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(color: Colors.green[800], borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)]),
+          child: Row(
+            children: [
+              const Icon(Icons.directions_walk, color: Colors.white, size: 40),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("${_distanceToNextStep.toStringAsFixed(0)} m", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                    Text(step.instruction, style: const TextStyle(color: Colors.white70, fontSize: 16), maxLines: 2, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
+              IconButton(icon: const Icon(Icons.close, color: Colors.white), onPressed: _stopNavigation)
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+extension on GesturesSettingsInterface {
+  void addOnMapTapListener(Null Function(MapContentGestureContext context) param0) {}
 }

@@ -26,7 +26,15 @@ dependencies:
   shared_preferences: ^2.2.2
   flutter_secure_storage: ^9.0.0
   provider: ^6.1.2
-
+  firebase_storage: ^11.6.5
+  cached_network_image: ^3.3.1
+  image_picker: ^1.2.1
+  panorama_viewer: ^2.0.7
+  file_picker: ^10.3.7
+  supabase_flutter: ^2.3.4
+  webview_flutter: ^4.13.0
+  image: ^4.0.17
+  firebase_database: ^10.5.7
 
 
 dev_dependencies:
@@ -39,7 +47,8 @@ flutter:
   generate: true
   uses-material-design: true
 
-  assets: 
+  assets:
     - .env
     - assets/dialogflow_key.json
+    - assets/images/
 

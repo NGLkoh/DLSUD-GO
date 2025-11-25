@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 class CampusLocation {
   final String id;
@@ -7,6 +8,8 @@ class CampusLocation {
   final double latitude;
   final double longitude;
   final IconData icon;
+  final List<String> imagePaths;
+  String? panoramaUrl; // Now mutable for dynamic updates
 
   CampusLocation({
     required this.id,
@@ -15,7 +18,118 @@ class CampusLocation {
     required this.latitude,
     required this.longitude,
     required this.icon,
+    this.imagePaths = const [],
+    this.panoramaUrl,
   });
+
+  // Helper to get main image
+  String get mainImage => imagePaths.isNotEmpty
+      ? imagePaths[0]
+      : 'assets/images/placeholder.jpg';
+
+  // Helper to check if location has gallery images
+  bool get hasGallery => imagePaths.length > 1;
+
+  // Helper to check if location has 360° panorama
+  bool get hasPanorama => panoramaUrl != null && panoramaUrl!.isNotEmpty;
+
+  // Copy with method for easy updates
+  CampusLocation copyWith({
+    String? id,
+    String? name,
+    String? description,
+    double? latitude,
+    double? longitude,
+    IconData? icon,
+    List<String>? imagePaths,
+    String? panoramaUrl,
+  }) {
+    return CampusLocation(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      icon: icon ?? this.icon,
+      imagePaths: imagePaths ?? this.imagePaths,
+      panoramaUrl: panoramaUrl ?? this.panoramaUrl,
+    );
+  }
+
+  // Firebase methods
+  Map<String, dynamic> toFirebaseJson() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'latitude': latitude,
+      'longitude': longitude,
+      'iconCodePoint': icon.codePoint,
+      'imagePaths': imagePaths,
+      'panoramaUrl': panoramaUrl,
+    };
+  }
+
+  factory CampusLocation.fromFirebaseJson(Map<dynamic, dynamic> json) {
+    return CampusLocation(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      description: json['description'] as String,
+      latitude: (json['latitude'] as num).toDouble(),
+      longitude: (json['longitude'] as num).toDouble(),
+      icon: IconData(json['iconCodePoint'] as int, fontFamily: 'MaterialIcons'),
+      imagePaths: (json['imagePaths'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList() ?? [],
+      panoramaUrl: json['panoramaUrl'] as String?,
+    );
+  }
+
+  Future<void> uploadAllLocations() async {
+    final DatabaseReference ref = FirebaseDatabase.instance.ref('campus_locations');
+
+    for (var location in CampusLocation.allLocations) {
+      await ref.child(location.id).set(location.toFirebaseJson());
+      print('Uploaded: ${location.name}');
+    }
+
+    print('All campus locations uploaded!');
+  }
+  // Save panorama URL to Firebase
+  static Future<void> savePanoramaUrl(String locationId, String panoramaUrl) async {
+    final DatabaseReference ref = FirebaseDatabase.instance.ref('campus_locations/$locationId');
+    await ref.update({
+      'panoramaUrl': panoramaUrl,
+      'updatedAt': ServerValue.timestamp,
+    });
+  }
+
+  // Load panorama URL from Firebase
+  static Future<String?> loadPanoramaUrl(String locationId) async {
+    final DatabaseReference ref = FirebaseDatabase.instance.ref('campus_locations/$locationId');
+    final snapshot = await ref.child('panoramaUrl').get();
+    if (snapshot.exists) {
+      return snapshot.value as String?;
+    }
+    return null;
+  }
+
+  // Load all locations with their panorama URLs from Firebase
+  static Future<Map<String, String>> loadAllPanoramaUrls() async {
+    final DatabaseReference ref = FirebaseDatabase.instance.ref('campus_locations');
+    final snapshot = await ref.get();
+
+    final Map<String, String> panoramaUrls = {};
+    if (snapshot.exists) {
+      final data = snapshot.value as Map<dynamic, dynamic>;
+      data.forEach((key, value) {
+        if (value is Map && value['panoramaUrl'] != null) {
+          panoramaUrls[key.toString()] = value['panoramaUrl'].toString();
+        }
+      });
+    }
+    return panoramaUrls;
+  }
 
   static List<CampusLocation> get allLocations => [
     CampusLocation(
@@ -25,6 +139,13 @@ class CampusLocation {
       latitude: 14.3208,
       longitude: 120.9619,
       icon: Icons.local_library,
+      imagePaths: [
+        'assets/images/AEA Road (1).webp',
+        'assets/images/AEA Road (2).webp',
+        'assets/images/AEA Road (3).webp',
+        'assets/images/AEA Road (4).webp'
+      ],
+      panoramaUrl: null, // Will be loaded from Firebase
     ),
     CampusLocation(
       id: 'agh',
@@ -33,6 +154,8 @@ class CampusLocation {
       latitude: 14.3206,
       longitude: 120.9629,
       icon: Icons.business,
+      imagePaths: ['assets/images/main.webp'],
+      panoramaUrl: null,
     ),
     CampusLocation(
       id: 'bahay_pagasa',
@@ -41,15 +164,8 @@ class CampusLocation {
       latitude: 14.3266,
       longitude: 120.9564,
       icon: Icons.house,
+      imagePaths: ['assets/images/main.webp'],
     ),
-    // CampusLocation(
-    //   id: 'bed',
-    //   name: 'Basic Education',
-    //   description: 'School Building',
-    //   latitude: 0.0,
-    //   longitude: 0.0,
-    //   icon: Icons.school_outlined,
-    // ),
     CampusLocation(
       id: 'cso',
       name: 'Campus Security Office',
@@ -57,6 +173,7 @@ class CampusLocation {
       latitude: 14.3244,
       longitude: 120.9590,
       icon: Icons.security,
+      imagePaths: ['assets/images/main.webp'],
     ),
     CampusLocation(
       id: 'cth_tirona',
@@ -65,6 +182,7 @@ class CampusLocation {
       latitude: 14.3234,
       longitude: 120.9592,
       icon: Icons.business,
+      imagePaths: ['assets/images/main.webp'],
     ),
     CampusLocation(
       id: 'ceat',
@@ -73,6 +191,7 @@ class CampusLocation {
       latitude: 14.3230,
       longitude: 120.9584,
       icon: Icons.engineering,
+      imagePaths: ['assets/images/main.webp'],
     ),
     CampusLocation(
       id: 'library',
@@ -81,15 +200,8 @@ class CampusLocation {
       latitude: 14.3208,
       longitude: 120.9619,
       icon: Icons.local_library,
+      imagePaths: ['assets/images/main.webp'],
     ),
-    // CampusLocation(
-    //   id: 'fdc',
-    //   name: 'DLSU-D Faculty Development Cooperative (FDC)',
-    //   description: 'Office',
-    //   latitude: 0.0,
-    //   longitude: 0.0,
-    //   icon: Icons.work,
-    // ),
     CampusLocation(
       id: 'mah',
       name: 'Doña Marcela De Agoncillo Hall (MAH)',
@@ -97,6 +209,7 @@ class CampusLocation {
       latitude: 14.3211,
       longitude: 120.9622,
       icon: Icons.business,
+      imagePaths: ['assets/images/main.webp'],
     ),
     CampusLocation(
       id: 'fdh',
@@ -105,15 +218,8 @@ class CampusLocation {
       latitude: 14.3202,
       longitude: 120.9628,
       icon: Icons.business,
+      imagePaths: ['assets/images/main.webp'],
     ),
-    // CampusLocation(
-    //   id: 'ermac',
-    //   name: 'ERMAC Building',
-    //   description: 'Campus Building',
-    //   latitude: 0.0,
-    //   longitude: 0.0,
-    //   icon: Icons.business,
-    // ),
     CampusLocation(
       id: 'fch',
       name: 'Felipe Calderon Hall (FCH)',
@@ -202,14 +308,6 @@ class CampusLocation {
       longitude: 120.9597,
       icon: Icons.business,
     ),
-    // CampusLocation(
-    //   id: 'llc',
-    //   name: 'Language Learning Center',
-    //   description: 'Academic Center',
-    //   latitude: 0.0,
-    //   longitude: 0.0,
-    //   icon: Icons.language,
-    // ),
     CampusLocation(
       id: 'cafeteria',
       name: 'Main Cafeteria',
@@ -338,14 +436,6 @@ class CampusLocation {
       longitude: 120.9601,
       icon: Icons.fastfood,
     ),
-    // CampusLocation(
-    //   id: 'uro',
-    //   name: 'University Research Office',
-    //   description: 'Office',
-    //   latitude: 0.0,
-    //   longitude: 0.0,
-    //   icon: Icons.science,
-    // ),
     CampusLocation(
       id: 'vbh',
       name: 'Vito Belarmino Hall (VBH)',

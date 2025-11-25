@@ -6,6 +6,7 @@ import '../../core/theme/app_theme.dart';
 import '../../models/dashboard_section.dart';
 import 'section_editor_screen.dart';
 import 'campus_info_editor_screen.dart';
+import '../panorama/panorama_list_screen.dart'; // Add this import
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -61,7 +62,7 @@ class UserFeedback {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
-  int _selectedIndex = 0; // 0: Dashboard, 1: Sections, 2: Campus Info, 3: Feedbacks
+  int _selectedIndex = 0; // 0: Dashboard, 1: Sections, 2: Campus Info, 3: Feedbacks, 4: Panorama
 
   Stream<List<UserFeedback>> _getFeedbackStream() {
     return FirebaseFirestore.instance
@@ -119,6 +120,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return 'Campus Info';
       case 3:
         return 'User Feedbacks';
+      case 4:
+        return '360° Panorama';
+      case 5:
+        return 'Pinned Locations';
       default:
         return 'Admin Dashboard';
     }
@@ -195,6 +200,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Navigator.pop(context);
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.threesixty, color: Color(0xFF1976D2)),
+            title: const Text('360° Panorama'),
+            selected: _selectedIndex == 4,
+            onTap: () {
+              setState(() => _selectedIndex = 4);
+              Navigator.pop(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.map, color: Color(0xFF1976D2)),
+            title: const Text('Pinned Locations'),
+            selected: _selectedIndex == 5,
+            onTap: () {
+              setState(() => _selectedIndex = 5);
+              Navigator.pop(context);
+            },
+          ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.feedback),
@@ -220,6 +243,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return _buildCampusInfoView();
       case 3:
         return _buildFeedbacksView();
+      case 4:
+        return _buildPanoramaView();
       default:
         return _buildDashboardView();
     }
@@ -298,6 +323,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     Icons.info,
                     appColors.warningOrange!,
                         () => setState(() => _selectedIndex = 2),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildQuickActionCard(
+                    'Manage 360° Panorama',
+                    'View and manage panorama images',
+                    Icons.threesixty,
+                    const Color(0xFF1976D2),
+                        () => setState(() => _selectedIndex = 4),
                   ),
                   const SizedBox(height: 12),
                   _buildQuickActionCard(
@@ -608,6 +641,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _buildCampusInfoView() {
     return CampusInfoEditorScreen();
+  }
+
+  Widget _buildPanoramaView() {
+    return const PanoramaListScreen();
   }
 
   IconData _getIconFromString(String iconName) {

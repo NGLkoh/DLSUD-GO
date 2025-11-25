@@ -9,6 +9,7 @@ import '../map/navigation/map_navigation_screen.dart';
 import '../search/search_screen.dart';
 import '../settings/settings_screen.dart';
 import '../info/static_info_screen.dart';
+import '../panorama/panorama_list_screen.dart'; // Add this import
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});

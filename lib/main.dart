@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'package:dlsud_go/screens/splash/splash_screen.dart';
 
@@ -23,6 +24,12 @@ void main() async {
   } catch (e) {
     debugPrint('Error loading .env file: $e');
   }
+
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: dotenv.env['SUPABASE_URL']!,
+    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
+  );
 
   // Set preferred orientations (portrait only for better UX)
   await SystemChrome.setPreferredOrientations([
@@ -52,7 +59,7 @@ class DLSUGoApp extends StatelessWidget {
             darkTheme: AppTheme.darkTheme,
             themeMode: settings.themeMode,
             locale: settings.locale,
-            home: const SplashScreen(),
+            home: const SplashScreen(), // Reverted to regular SplashScreen
             // Global error handling for better UX
             builder: (context, widget) {
               // Handle text scaling for accessibility
