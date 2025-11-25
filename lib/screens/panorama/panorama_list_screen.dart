@@ -6,6 +6,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image/image.dart' as img;
 import 'panorama_view_screen.dart';
 import 'package:dlsud_go/models/campus_location.dart';
+// desktop_drop import is no longer needed
 
 class PanoramaListScreen extends StatefulWidget {
   const PanoramaListScreen({super.key});
@@ -19,12 +20,15 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
   bool _isUploading = false;
   String _uploadStatus = '';
   Map<String, String> _locationPanoramaUrls = {}; // Cache for location panoramas
+  // bool _dragging = false; // State for desktop_drop removed
 
   @override
   void initState() {
     super.initState();
     _loadPanoramaUrls();
   }
+
+  // The _handleDroppedFiles function is no longer needed
 
   // Load all panorama URLs from Firebase
   Future<void> _loadPanoramaUrls() async {
@@ -48,6 +52,7 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
 
     for (var file in imageFiles) {
       final bytes = await file.readAsBytes();
+      // Use img.decodeImage which handles various formats including WebP, JPEG, and PNG
       var image = img.decodeImage(bytes);
 
       if (image != null) {
@@ -151,8 +156,10 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
   }
 
   Future<void> _pickAndUploadImage() async {
+    // --- CHANGE: Added 'webp' to the allowed extensions ---
     final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
+      type: FileType.custom,
+      allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
       allowMultiple: true,
     );
 
@@ -314,6 +321,7 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
         )
             : const Icon(Icons.add_photo_alternate),
       ),
+      // --- CHANGE: DropTarget wrapper removed ---
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: supabase
             .from("panoramas")
@@ -471,9 +479,9 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
+                                  const Text(
                                     "360° Panorama",
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
                                     ),

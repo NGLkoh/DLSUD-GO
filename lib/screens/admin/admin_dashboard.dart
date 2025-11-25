@@ -122,8 +122,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return 'User Feedbacks';
       case 4:
         return '360° Panorama';
-      case 5:
-        return 'Pinned Locations';
       default:
         return 'Admin Dashboard';
     }
@@ -147,13 +145,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Icon(
                   Icons.admin_panel_settings,
                   size: 48,
-                  color: appColors.textDark,
+                  color: appColors.textLight,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Admin Panel',
                   style: TextStyle(
-                    color: appColors.textDark,
+                    color: appColors.textLight,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
@@ -206,15 +204,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
             selected: _selectedIndex == 4,
             onTap: () {
               setState(() => _selectedIndex = 4);
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.map, color: Color(0xFF1976D2)),
-            title: const Text('Pinned Locations'),
-            selected: _selectedIndex == 5,
-            onTap: () {
-              setState(() => _selectedIndex = 5);
               Navigator.pop(context);
             },
           ),
@@ -507,11 +496,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   padding: EdgeInsets.zero,
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 10),
                 if (section.subsections.isNotEmpty)
                   Chip(
                     label: Text(
-                      '${section.subsections.length} subsections',
+                      '${section.subsections.length} Sub',
                       style: const TextStyle(fontSize: 11),
                     ),
                     backgroundColor: appColors.accentBlue!.withOpacity(0.1),
