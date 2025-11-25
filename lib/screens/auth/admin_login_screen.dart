@@ -1,5 +1,5 @@
 // lib/screens/auth/admin_login_screen.dart
-// Updated with Remember Me functionality
+// Updated with Remember Me functionality and Dark Mode support
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -171,11 +171,18 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 🔑 Detect if dark mode is enabled
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final backgroundColor = isDarkMode ? Colors.grey[900] : AppColors.backgroundColor;
+    final textColor = isDarkMode ? Colors.white : AppColors.textDark;
+    final subtitleColor = isDarkMode ? Colors.grey[400] : AppColors.textMedium;
+    final surfaceColor = isDarkMode ? Colors.grey[850] : AppColors.surfaceColor;
+
     return Scaffold(
-      backgroundColor: AppColors.backgroundColor,
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         title: const Text('Admin Login'),
-        backgroundColor: AppColors.backgroundColor,
+        backgroundColor: backgroundColor,
         elevation: 1,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -191,15 +198,15 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 40),
-                _buildWelcomeSection(),
+                _buildWelcomeSection(textColor, subtitleColor),
                 const SizedBox(height: 40),
                 _buildLoginForm(),
                 const SizedBox(height: 24),
-                _buildRememberMeSection(),
+                _buildRememberMeSection(textColor),
                 const SizedBox(height: 32),
                 _buildLoginButton(),
                 const SizedBox(height: 24),
-                _buildHelpSection(),
+                _buildHelpSection(surfaceColor, subtitleColor),
               ],
             ),
           ),
@@ -208,23 +215,23 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     );
   }
 
-  Widget _buildWelcomeSection() {
+  Widget _buildWelcomeSection(Color textColor, Color? subtitleColor) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
+      children: [
         Text(
           'Welcome back! Glad to\nsee you, Again!',
           style: TextStyle(
             fontSize: 28,
             fontWeight: FontWeight.bold,
-            color: AppColors.textDark,
+            color: textColor,
             height: 1.2,
           ),
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         Text(
           'Sign in to access administrative features',
-          style: TextStyle(fontSize: 16, color: AppColors.textMedium),
+          style: TextStyle(fontSize: 16, color: subtitleColor),
         ),
       ],
     );
@@ -277,7 +284,9 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     );
   }
 
-  Widget _buildRememberMeSection() {
+  Widget _buildRememberMeSection(Color textColor) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return Row(
       children: [
         Checkbox(
@@ -287,14 +296,19 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               : (value) => setState(() => _rememberMe = value ?? false),
           activeColor: AppColors.primaryGreen,
         ),
-        const Text('Remember Me'),
+        Text(
+          'Remember Me',
+          style: TextStyle(color: textColor),
+        ),
         const Spacer(),
         TextButton(
           onPressed: _isLoading ? null : _showForgotPasswordDialog,
           child: Text(
             'Forgot Password?',
             style: TextStyle(
-              color: _isLoading ? Colors.grey : AppColors.primaryGreen,
+              color: _isLoading
+                  ? (isDarkMode ? Colors.grey[700] : Colors.grey)
+                  : AppColors.primaryGreen,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -313,14 +327,18 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     );
   }
 
-  Widget _buildHelpSection() {
+  Widget _buildHelpSection(Color? surfaceColor, Color? subtitleColor) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceColor,
+        color: surfaceColor,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: Colors.grey.withOpacity(0.2),
+          color: isDarkMode
+              ? Colors.grey.withOpacity(0.3)
+              : Colors.grey.withOpacity(0.2),
           width: 1,
         ),
       ),
@@ -337,7 +355,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
               'Having trouble? Contact your administrator for support.',
               style: TextStyle(
                 fontSize: 14,
-                color: AppColors.textMedium,
+                color: subtitleColor,
                 height: 1.4,
               ),
             ),
@@ -348,6 +366,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   }
 
   void _showForgotPasswordDialog() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     final emailController = TextEditingController(
       text: _emailController.text.trim(),
     );
@@ -355,13 +374,22 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset Password'),
+        backgroundColor: isDarkMode ? Colors.grey[850] : null,
+        title: Text(
+          'Reset Password',
+          style: TextStyle(
+            color: isDarkMode ? Colors.white : null,
+          ),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
+            Text(
               'Enter your email to receive a password reset link.',
-              style: TextStyle(fontSize: 14),
+              style: TextStyle(
+                fontSize: 14,
+                color: isDarkMode ? Colors.grey[300] : null,
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
@@ -379,7 +407,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text(
+              'Cancel',
+              style: TextStyle(
+                color: isDarkMode ? Colors.grey[400] : null,
+              ),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {

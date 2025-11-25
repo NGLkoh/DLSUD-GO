@@ -42,30 +42,32 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
       backgroundColor: AppColors.backgroundColor,
       body: CustomScrollView(
         slivers: [
-          // App bar with hero image and title
           SliverAppBar(
-            expandedHeight: 250,
+            expandedHeight: 200,
             floating: false,
             pinned: true,
+            centerTitle: true,
             backgroundColor: AppColors.primaryGreen,
             leading: IconButton(
               icon: const Icon(Icons.arrow_back, color: Colors.white),
               onPressed: () => Navigator.pop(context),
             ),
             flexibleSpace: FlexibleSpaceBar(
-              title: Center(
-                child: Text(
-                  widget.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                  ),
+              centerTitle: true,
+              // 🔑 ADD: Title that appears when collapsed
+              title: Text(
+                widget.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
+              titlePadding: const EdgeInsets.only(bottom: 16), // Adjust position
               background: Stack(
                 fit: StackFit.expand,
                 children: [
-                  // Background image placeholder - replace with actual campus image
+                  // Background color/gradient
                   Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -78,22 +80,26 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
                       ),
                     ),
                   ),
-                  // Hero section with DLSU statue/campus image
+
+                  // Hero section with the desired stacked text layout
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.3),
                     ),
-                    child: const Center(
+                    child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(
+                          // 1. Icon
+                          const Icon(
                             Icons.account_balance,
                             size: 80,
                             color: Colors.white,
                           ),
-                          SizedBox(height: 16),
-                          Text(
+                          const SizedBox(height: 10),
+
+                          // 2. Subtitle ("De La Salle University-Dasmariñas")
+                          const Text(
                             'De La Salle University-Dasmariñas',
                             style: TextStyle(
                               color: Colors.white,
@@ -102,6 +108,7 @@ class _StaticInfoScreenState extends State<StaticInfoScreen>
                             ),
                             textAlign: TextAlign.center,
                           ),
+                          const SizedBox(height: 2),
                         ],
                       ),
                     ),
