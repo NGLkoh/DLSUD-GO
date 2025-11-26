@@ -130,29 +130,22 @@ class _SplashScreenState extends State<SplashScreen>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Logo container with animations
+                  // Logo image with animations
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: ScaleTransition(
                       scale: _scaleAnimation,
                       child: Container(
-                        width: 120,
-                        height: 120,
+                        width: 200,
+                        height: 200,
                         decoration: BoxDecoration(
-                          color: Colors.white,
                           borderRadius: BorderRadius.circular(30),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha(51),
-                              blurRadius: 20,
-                              offset: const Offset(0, 10),
-                            ),
-                          ],
                         ),
-                        child: const Icon(
-                          Icons.explore,
-                          size: 60,
-                          color: AppColors.primaryGreen,
+                        child: ClipRRect(
+                          child: Image.asset(
+                            'assets/images/DLSU-D GO!.png',
+                            fit: BoxFit.contain,
+                          ),
                         ),
                       ),
                     ),
@@ -160,31 +153,16 @@ class _SplashScreenState extends State<SplashScreen>
 
                   const SizedBox(height: 32),
 
-                  // App name with fade animation
-                  FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: const Text(
-                      AppConstants.appName,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Subtitle with delayed fade
+                  // Subtitle with fade animation
                   FadeTransition(
                     opacity: _fadeAnimation,
                     child: const Text(
                       'Your Smart Campus Navigator',
                       style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w400,
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
@@ -208,123 +186,6 @@ class _SplashScreenState extends State<SplashScreen>
             ),
           );
         },
-      ),
-    );
-  }
-}
-
-// Alternative splash screen with DLSU logo placeholder
-// You can replace this with the actual DLSU logo image
-class SplashScreenWithLogo extends StatefulWidget {
-  const SplashScreenWithLogo({super.key});
-
-  @override
-  State<SplashScreenWithLogo> createState() => _SplashScreenWithLogoState();
-}
-
-class _SplashScreenWithLogoState extends State<SplashScreenWithLogo>
-    with TickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 2000),
-      vsync: this,
-    );
-
-    _animation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeInOut,
-    );
-
-    _animationController.forward();
-
-    Timer(const Duration(seconds: AppConstants.splashDuration), () async {
-      if (mounted) {
-        // Check if terms have been accepted
-        final prefs = await SharedPreferences.getInstance();
-        final termsAccepted = prefs.getBool('terms_accepted') ?? false;
-
-        if (!mounted) return;
-
-        Widget destination;
-
-        if (termsAccepted) {
-          destination = const MainDashboard();
-        } else {
-          destination = const TermsConditionsScreen(isFirstTime: true);
-        }
-
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => destination),
-        );
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _animationController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      body: Center(
-        child: FadeTransition(
-          opacity: _animation,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // DLSU Logo placeholder - replace with actual logo
-              Container(
-                width: 150,
-                height: 150,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryGreen,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Center(
-                  child: Text(
-                    'DLSU-D\nLOGO',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 40),
-
-              const Text(
-                AppConstants.appName,
-                style: TextStyle(
-                  color: AppColors.primaryGreen,
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-
-              const SizedBox(height: 8),
-
-              const Text(
-                'Smart Campus Navigation',
-                style: TextStyle(
-                  color: AppColors.textMedium,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

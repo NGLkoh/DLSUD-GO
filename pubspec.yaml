@@ -43,8 +43,14 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-
+  flutter_launcher_icons: ^0.13.1
   flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.0
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/images/LOGO.png"
 
 flutter:
   generate: true
@@ -55,4 +61,3 @@ flutter:
     - assets/dialogflow_key.json
     - assets/images/
     - assets/translations/
-
