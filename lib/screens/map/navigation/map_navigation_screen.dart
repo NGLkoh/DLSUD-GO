@@ -622,10 +622,12 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
         builder: (context, scrollController) {
           return StatefulBuilder(
               builder: (BuildContext context, StateSetter setSheetState) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+
                 return Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[900] : Colors.white,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                   ),
                   child: Column(
                     children: [
@@ -635,7 +637,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
                           margin: const EdgeInsets.only(top: 12, bottom: 8),
                           width: 40,
                           height: 4,
-                          color: Colors.grey[300],
+                          color: isDark ? Colors.grey[700] : Colors.grey[300],
                         ),
                       ),
 
@@ -669,13 +671,17 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
 
 
   Widget _buildPlacesList(ScrollController controller, StateSetter setSheetState) {
-    // 3. IMPLEMENT FUNCTIONAL SEARCH BAR (TextField)
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Column(
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: TextField(
             controller: _searchController,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
             onChanged: (value) {
               setSheetState(() {
                 _searchQuery = value;
@@ -683,50 +689,73 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
             },
             decoration: InputDecoration(
               hintText: "Search DLSU-D...",
-              hintStyle: const TextStyle(color: Colors.grey, fontSize: 16),
-              prefixIcon: const Icon(Icons.search, color: Colors.grey),
+              hintStyle: TextStyle(
+                color: isDark ? Colors.grey[500] : Colors.grey[600],
+                fontSize: 16,
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                color: isDark ? Colors.grey[500] : Colors.grey[600],
+              ),
               contentPadding: const EdgeInsets.symmetric(vertical: 15),
               filled: true,
-              fillColor: Colors.grey[100],
+              fillColor: isDark ? Colors.grey[850] : Colors.grey[100],
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(color: Colors.green, width: 2),
+                borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 2),
               ),
             ),
           ),
         ),
 
-        // 4. USE FILTERED LOCATIONS IN LISTVIEW
         Expanded(
           child: ListView.separated(
             controller: controller,
             padding: const EdgeInsets.symmetric(horizontal: 16),
             itemCount: _filteredLocations.length,
-            separatorBuilder: (ctx, i) => const Divider(height: 1),
+            separatorBuilder: (ctx, i) => Divider(
+              height: 1,
+              color: isDark ? Colors.grey[800] : Colors.grey[300],
+            ),
             itemBuilder: (ctx, i) {
               final loc = _filteredLocations[i];
               return ListTile(
                 contentPadding: const EdgeInsets.symmetric(vertical: 4),
                 leading: Container(
                   padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-                  child: Icon(loc.icon, color: Colors.green, size: 24),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    loc.icon,
+                    color: const Color(0xFF4CAF50),
+                    size: 24,
+                  ),
                 ),
-                title: Text(loc.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text(loc.description, maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Text(
+                  loc.name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                subtitle: Text(
+                  loc.description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                  ),
+                ),
                 onTap: () {
-                  // Set state in the main widget to update the map
                   this.setState(() => _destination = loc);
                   _drawRoute();
-
-                  // Update the sheet state to show the details view
                   setSheetState(() {});
-
-                  // Clear search query after selection
                   _searchQuery = '';
                   _searchController.clear();
                 },
@@ -742,6 +771,8 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
 
 
   Widget _buildDestinationDetails(ScrollController controller, StateSetter setSheetState) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Stack(
       children: [
         ListView(
@@ -777,16 +808,19 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
             // 2. INFO
             Text(
               _destination!.name,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.black,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               _destination!.description,
-              style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+              style: TextStyle(
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -800,7 +834,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
             ),
             const SizedBox(height: 24),
 
-            // NEW: 4. 360° PANORAMA BUTTON (if available)
+            // 4. 360° PANORAMA BUTTON
             if (_destination!.hasPanorama)
               SizedBox(
                 width: double.infinity,
@@ -831,7 +865,6 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
                 ),
               ),
 
-
             if (_destination!.hasPanorama) const SizedBox(height: 16),
 
             // 5. START NAVIGATION BUTTON
@@ -859,17 +892,21 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
           ],
         ),
 
-        // 6. POLISHED CLOSE BUTTON (Right)
+        // 6. CLOSE BUTTON
         Positioned(
           right: 16,
           top: 16,
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: isDark ? Colors.grey[850] : Colors.grey[100],
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              icon: Icon(Icons.close, size: 24, color: Colors.grey[700]),
+              icon: Icon(
+                Icons.close,
+                size: 24,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
               onPressed: () {
                 this.setState(() {
                   _destination = null;
@@ -882,17 +919,21 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
           ),
         ),
 
-        // 7. POLISHED BACK BUTTON (Left) - GOES BACK TO LIST
+        // 7. BACK BUTTON
         Positioned(
           left: 16,
           top: 16,
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: isDark ? Colors.grey[850] : Colors.grey[100],
               shape: BoxShape.circle,
             ),
             child: IconButton(
-              icon: Icon(Icons.arrow_back, size: 24, color: Colors.grey[700]),
+              icon: Icon(
+                Icons.arrow_back,
+                size: 24,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
               onPressed: () {
                 this.setState(() {
                   _destination = null;
@@ -910,20 +951,29 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
 
 
   Widget _infoPill(IconData icon, String text) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
+        color: isDark ? Colors.grey[850] : Colors.grey[100],
         borderRadius: BorderRadius.circular(30),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: Colors.grey[700]),
+          Icon(
+            icon,
+            size: 16,
+            color: isDark ? Colors.grey[400] : Colors.grey[700],
+          ),
           const SizedBox(width: 8),
           Text(
             text,
-            style: TextStyle(color: Colors.grey[800], fontWeight: FontWeight.w500),
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurface,
+              fontWeight: FontWeight.w500,
+            ),
           ),
         ],
       ),

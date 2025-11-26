@@ -524,10 +524,6 @@ class DashboardHomeTab extends StatelessWidget {
     final title = 'campus_info.title'.tr();
     final buttonText = 'campus_info.button'.tr();
 
-    // 2. Translate Subtitle
-    // We use the key directly for the subtitle to ensure it translates
-    final subtitle = 'campus_info.subtitle'.tr();
-
     // 3. Handle Description Translation (The long text)
     // We grab the raw text from the database
     String rawDescription = data['description'] ?? '';
@@ -574,13 +570,6 @@ class DashboardHomeTab extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: appColors.textMedium,
-                        ),
-                      ),
                     ],
                   ),
                 ),
