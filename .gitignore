@@ -48,3 +48,4 @@ app.*.map.json
 assets/dialogflow_key.json
 .env
 /android/key.properties
+*.jks
