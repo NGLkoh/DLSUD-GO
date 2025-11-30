@@ -6,7 +6,6 @@ import '../../models/dashboard_section.dart';
 import '../../widgets/common/custom_button.dart';
 import '../chatbot/chatbot_screen.dart';
 import '../map/navigation/map_navigation_screen.dart';
-import '../search/search_screen.dart';
 import '../settings/settings_screen.dart';
 import '../info/static_info_screen.dart';
 

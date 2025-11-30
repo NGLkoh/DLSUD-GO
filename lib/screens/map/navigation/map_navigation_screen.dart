@@ -6,19 +6,15 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart' as geolocator;
 import 'package:http/http.dart' as http;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
+import 'package:flutter_tts/flutter_tts.dart'; // 1. ADDED TTS IMPORT
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-// --- 1. MODELS ---
+
+// --- 1. MODELS & IMPORTS ---
 import 'package:dlsud_go/widgets/image_gallery_screen.dart';
 import 'package:dlsud_go/screens/panorama/panorama_view_screen.dart';
-import 'package:dlsud_go/models/campus_location.dart';
-
-CircleAnnotationManager? circleAnnotationManager;
-PolylineAnnotationManager? polylineAnnotationManager;
-Map<String, String> _annotationToLocationId = {};
-
-// ❌ REMOVE THIS DUPLICATE CLASS - Already imported above!
-// Delete lines 17-71 (the CampusLocation class definition)
+import 'package:dlsud_go/models/campus_location.dart'; 
+// (Make sure this file exists and contains the CampusLocation class)
 
 class NavigationStep {
   final String instruction;
@@ -57,7 +53,7 @@ class NavigationConstants {
   static const double defaultZoom = 16.0;
   static const double navigationZoom = 18.5;
   static const double navigationPitch = 60.0;
-  static const double stepCompletionThreshold = 15.0;
+  static const double stepCompletionThreshold = 15.0; // Distance in meters to complete a step
   static const Color routeColor = Color(0xFF007B3E); // DLSU Green
   static const double defaultLat = 14.3250;
   static const double defaultLng = 120.9580;
@@ -74,6 +70,9 @@ class MapNavigationScreen extends StatefulWidget {
 
 class _MapNavigationScreenState extends State<MapNavigationScreen> {
   MapboxMap? mapboxMap;
+  
+  // TTS Instance
+  final FlutterTts _flutterTts = FlutterTts(); // 2. INSTANTIATE TTS
 
   final List<CampusLocation> _allLocations = CampusLocation.allLocations;
   CampusLocation? _destination;
@@ -91,15 +90,20 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
 
   StreamSubscription<geolocator.Position>? _positionSubscription;
 
-  // 1. ADD SEARCH STATE
+  // Search State
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
+  // Annotation Managers
+  CircleAnnotationManager? circleAnnotationManager;
+  PointAnnotationManager? pointAnnotationManager;
+  PolylineAnnotationManager? polylineAnnotationManager;
 
   @override
   void initState() {
     super.initState();
     _initializeUserLocation();
+    _initTts(); // 3. INITIALIZE TTS
   }
 
   @override
@@ -108,22 +112,32 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
     circleAnnotationManager?.deleteAll();
     pointAnnotationManager?.deleteAll();
     polylineAnnotationManager?.deleteAll();
-    _searchController.dispose(); // Dispose the controller
+    _searchController.dispose();
+    _flutterTts.stop(); // 4. STOP TTS ON DISPOSE
     super.dispose();
   }
 
-  // --- MAP LOGIC ---
-  CircleAnnotationManager? circleAnnotationManager; // Fallback
-  PointAnnotationManager? pointAnnotationManager;   // For images
+  // --- TTS CONFIGURATION ---
+  Future<void> _initTts() async {
+    await _flutterTts.setLanguage("en-US");
+    await _flutterTts.setSpeechRate(0.5); // Adjust speed (0.0 to 1.0)
+    await _flutterTts.setVolume(1.0);
+  }
 
-// UPDATE _onMapCreated to create BOTH managers:
+  Future<void> _speakInstruction(String text) async {
+    if (text.isNotEmpty) {
+      await _flutterTts.speak(text);
+    }
+  }
+
+  // --- MAP LOGIC ---
 
   void _onMapCreated(MapboxMap mapboxMap) async {
     this.mapboxMap = mapboxMap;
 
     await _enable3DBuildings();
 
-    // Create BOTH annotation managers
+    // Create annotation managers
     circleAnnotationManager = await mapboxMap.annotations.createCircleAnnotationManager();
     pointAnnotationManager = await mapboxMap.annotations.createPointAnnotationManager();
     polylineAnnotationManager = await mapboxMap.annotations.createPolylineAnnotationManager();
@@ -142,30 +156,23 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
       _handleMapTap(context.point);
     });
   }
-  // --- FEATURE: 3D BUILDINGS (FIXED TYPE ERROR) ---
+
   Future<void> _enable3DBuildings() async {
     if (mapboxMap == null) return;
-
     try {
       final style = mapboxMap!.style;
-
       if (await style.styleLayerExists("3d-buildings")) return;
 
-      // 1. Create layer with placeholders (to satisfy strict double type checks)
       var fillExtrusionLayer = FillExtrusionLayer(
         id: "3d-buildings",
         sourceId: "composite",
         sourceLayer: "building",
-        minZoom: 15.0, // OPTIMIZATION: Only render when zoomed in
-        fillExtrusionColor: Colors.grey[300]!.value, // Neutral building color
+        minZoom: 15.0,
+        fillExtrusionColor: Colors.grey[300]!.value,
         fillExtrusionOpacity: 0.9,
       );
 
-      // 2. Add the layer
       await style.addLayer(fillExtrusionLayer);
-
-      // 3. Apply the expressions dynamically using raw JSON properties
-      // This bypasses the strict 'double' type requirement of the Dart class
       await style.setStyleLayerProperty("3d-buildings", "fill-extrusion-height", ["get", "height"]);
       await style.setStyleLayerProperty("3d-buildings", "fill-extrusion-base", ["get", "min_height"]);
 
@@ -175,106 +182,70 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
   }
 
   Future<void> _loadLocationMarkers() async {
-    if (pointAnnotationManager == null || circleAnnotationManager == null) {
-      debugPrint('❌ Annotation managers not ready');
-      return;
-    }
+    if (pointAnnotationManager == null || circleAnnotationManager == null) return;
 
     await pointAnnotationManager!.deleteAll();
     await circleAnnotationManager!.deleteAll();
 
-    debugPrint('✅ Loading ${_allLocations.length} markers...');
-
     for (var location in _allLocations) {
       bool imageLoaded = false;
 
-      // Try to load image marker first
+      // Try to load image marker
       if (location.imagePaths.isNotEmpty) {
         Uint8List? imageBytes = await _loadImageAsBytes(location.mainImage);
-
         if (imageBytes != null) {
           try {
             await pointAnnotationManager!.create(
               PointAnnotationOptions(
-                geometry: Point(
-                  coordinates: Position(location.longitude, location.latitude),
-                ),
+                geometry: Point(coordinates: Position(location.longitude, location.latitude)),
                 image: imageBytes,
                 iconSize: 0.25,
                 iconAnchor: IconAnchor.BOTTOM,
               ),
             );
             imageLoaded = true;
-            debugPrint('✅ Image marker: ${location.name}');
           } catch (e) {
             debugPrint('⚠️ Image marker failed for ${location.name}: $e');
           }
         }
       }
 
-      // Fallback to circle if image failed or doesn't exist
+      // Fallback to circle
       if (!imageLoaded) {
         await circleAnnotationManager!.create(
           CircleAnnotationOptions(
-            geometry: Point(
-              coordinates: Position(location.longitude, location.latitude),
-            ),
+            geometry: Point(coordinates: Position(location.longitude, location.latitude)),
             circleColor: Colors.red.value,
             circleRadius: 12.0,
             circleStrokeWidth: 3.0,
             circleStrokeColor: Colors.white.value,
           ),
         );
-        debugPrint('🔴 Circle marker (fallback): ${location.name}');
       }
     }
-
-    debugPrint('✅ All markers loaded');
   }
-  // ADD this helper method to load images:
+
   Future<Uint8List?> _loadImageAsBytes(String assetPath) async {
     try {
-      debugPrint('   🔄 Loading image from: $assetPath');
-
-      // Load the asset as ByteData
       final ByteData data = await rootBundle.load(assetPath);
-      debugPrint('   ✅ Asset loaded: ${data.lengthInBytes} bytes');
-
-      // Decode to image
       final ui.Codec codec = await ui.instantiateImageCodec(
         data.buffer.asUint8List(),
-        targetWidth: 150, // Increased resolution
+        targetWidth: 150,
         targetHeight: 150,
       );
-
       final ui.FrameInfo frameInfo = await codec.getNextFrame();
       final ui.Image image = frameInfo.image;
-      debugPrint('   ✅ Image decoded: ${image.width}x${image.height}');
-
-      // Convert to PNG bytes
-      final ByteData? byteData = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-
-      if (byteData == null) {
-        debugPrint('   ❌ Failed to convert image to PNG bytes');
-        return null;
-      }
-
-      debugPrint('   ✅ Image converted to PNG: ${byteData.lengthInBytes} bytes');
-      return byteData.buffer.asUint8List();
-
+      final ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
     } catch (e) {
-      debugPrint('   ❌ Error loading image $assetPath: $e');
       return null;
     }
   }
 
-
   void _handleMapTap(Point coordinate) {
     CampusLocation? closestMatch;
     double shortestDistance = double.infinity;
-    const double hitThreshold = 120.0; // Generous hit area
+    const double hitThreshold = 120.0;
 
     for (var location in _allLocations) {
       final distance = geolocator.Geolocator.distanceBetween(
@@ -295,18 +266,12 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
         _destination = closestMatch;
       });
       _drawRoute();
-
-      // This logic seems incorrect. You probably want to show the sheet, not pop the current context
-      // if (Navigator.canPop(context)) {
-      //   Navigator.pop(context);
-      // }
       _openSearchSheet();
     }
   }
 
   void _updateNearestLocationLabel(geolocator.Position position) {
     if (_allLocations.isEmpty) return;
-
     CampusLocation? nearest;
     double minDistance = double.infinity;
 
@@ -328,9 +293,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
     }
 
     if (mounted && label != _currentLocationLabel) {
-      setState(() {
-        _currentLocationLabel = label;
-      });
+      setState(() => _currentLocationLabel = label);
     }
   }
 
@@ -429,7 +392,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
     mapboxMap!.flyTo(cameraOptions, MapAnimationOptions(duration: 1000));
   }
 
-  // --- NAVIGATION EXECUTION ---
+  // --- NAVIGATION EXECUTION (UPDATED WITH VOICE) ---
 
   void _startNavigation() {
     if (Navigator.canPop(context)) {
@@ -440,6 +403,11 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
       _isNavigating = true;
       _currentStepIndex = 0;
     });
+
+    // Speak the first instruction immediately
+    if (_navigationSteps.isNotEmpty) {
+      _speakInstruction(_navigationSteps[0].instruction); // 5. SPEAK FIRST INSTRUCTION
+    }
 
     _positionSubscription?.cancel();
     _positionSubscription = geolocator.Geolocator.getPositionStream(
@@ -452,6 +420,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
       _currentPosition = pos;
       _updateNearestLocationLabel(pos);
 
+      // Camera follows user
       mapboxMap?.flyTo(
         CameraOptions(
           center: Point(coordinates: Position(pos.longitude, pos.latitude)),
@@ -462,6 +431,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
         MapAnimationOptions(duration: 500),
       );
 
+      // Step Completion Logic
       if (_navigationSteps.isNotEmpty && _currentStepIndex < _navigationSteps.length) {
         final step = _navigationSteps[_currentStepIndex];
         final dist = geolocator.Geolocator.distanceBetween(
@@ -470,9 +440,17 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
         setState(() => _distanceToNextStep = dist);
 
         if (dist < NavigationConstants.stepCompletionThreshold) {
-          setState(() => _currentStepIndex++);
+          setState(() {
+            _currentStepIndex++;
+            // 6. SPEAK NEXT INSTRUCTION ON STEP COMPLETION
+            if (_currentStepIndex < _navigationSteps.length) {
+              _speakInstruction(_navigationSteps[_currentStepIndex].instruction);
+            }
+          });
+          
           if (_currentStepIndex >= _navigationSteps.length) {
             _stopNavigation();
+            _speakInstruction("You have arrived at your destination."); // Arrival announcement
             _showArrivalDialog();
           }
         }
@@ -482,6 +460,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
 
   void _stopNavigation() {
     _positionSubscription?.cancel();
+    _flutterTts.stop(); // Stop speaking
     setState(() => _isNavigating = false);
     mapboxMap?.flyTo(
         CameraOptions(
@@ -508,14 +487,17 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // 7. PREFER CUSTOM STYLE FROM .ENV
+    final String mapStyle = dotenv.env['MAPBOX_STYLE_URI'] ?? MapboxStyles.OUTDOORS;
+
     return Scaffold(
       extendBodyBehindAppBar: true,
       body: Stack(
         children: [
-          // 1. MAP
+          
           MapWidget(
             onMapCreated: _onMapCreated,
-            styleUri: MapboxStyles.OUTDOORS,
+            styleUri: mapStyle, // Updated to use dynamic style
             cameraOptions: CameraOptions(
               center: Point(coordinates: Position(NavigationConstants.defaultLng, NavigationConstants.defaultLat)),
               zoom: NavigationConstants.defaultZoom,
@@ -604,10 +586,9 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
   // --- SLIDE-IN SHEET LOGIC ---
 
   void _openSearchSheet() {
-    // Reset search query and clear controller when opening the sheet
     _searchQuery = '';
     _searchController.clear();
-    setState(() {}); // Important to reset the state outside the sheet as well
+    setState(() {}); 
 
     showModalBottomSheet(
       context: context,
@@ -631,7 +612,6 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
                   ),
                   child: Column(
                     children: [
-                      // Drag Handle
                       Center(
                         child: Container(
                           margin: const EdgeInsets.only(top: 12, bottom: 8),
@@ -640,8 +620,6 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
                           color: isDark ? Colors.grey[700] : Colors.grey[300],
                         ),
                       ),
-
-                      // Content
                       Expanded(
                           child: _destination == null
                               ? _buildPlacesList(scrollController, setSheetState)
@@ -657,7 +635,6 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
     );
   }
 
-  // 2. FILTERING LOGIC
   List<CampusLocation> get _filteredLocations {
     if (_searchQuery.isEmpty) {
       return _allLocations;
@@ -668,7 +645,6 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
           location.description.toLowerCase().contains(query);
     }).toList();
   }
-
 
   Widget _buildPlacesList(ScrollController controller, StateSetter setSheetState) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -753,7 +729,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
                   ),
                 ),
                 onTap: () {
-                  this.setState(() => _destination = loc);
+                  setState(() => _destination = loc);
                   _drawRoute();
                   setSheetState(() {});
                   _searchQuery = '';
@@ -766,9 +742,6 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
       ],
     );
   }
-
-  // Replace the _buildDestinationDetails method in your MapNavigationScreen
-
 
   Widget _buildDestinationDetails(ScrollController controller, StateSetter setSheetState) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -799,7 +772,25 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
               },
               child: Stack(
                 children: [
-                  // Image Placeholder/Widget goes here...
+                  // Placeholder for image logic if you want to display the image here
+                  // Currently empty in original code, consider adding an Image.asset/network here
+                  Container(
+                    height: 200,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(16),
+                      image: _destination!.imagePaths.isNotEmpty
+                        ? DecorationImage(
+                            image: AssetImage(_destination!.mainImage), 
+                            fit: BoxFit.cover
+                          )
+                        : null
+                    ),
+                    child: _destination!.imagePaths.isEmpty 
+                      ? const Center(child: Icon(Icons.image_not_supported)) 
+                      : null,
+                  ),
                 ],
               ),
             ),
@@ -908,7 +899,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
               onPressed: () {
-                this.setState(() {
+                setState(() {
                   _destination = null;
                   _routeDistance = null;
                 });
@@ -935,7 +926,7 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
                 color: Theme.of(context).colorScheme.onSurface,
               ),
               onPressed: () {
-                this.setState(() {
+                setState(() {
                   _destination = null;
                   _routeDistance = null;
                 });
@@ -948,7 +939,6 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
       ],
     );
   }
-
 
   Widget _infoPill(IconData icon, String text) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -976,20 +966,6 @@ class _MapNavigationScreenState extends State<MapNavigationScreen> {
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildCircleButton({required IconData icon, required VoidCallback onTap}) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)],
-      ),
-      child: IconButton(
-        icon: Icon(icon, color: Colors.black),
-        onPressed: onTap,
       ),
     );
   }

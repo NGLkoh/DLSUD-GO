@@ -8,8 +8,6 @@ import 'package:googleapis_auth/auth_io.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/chat_message.dart';
 
-
-// ADD THE FUNCTION HERE
 Future<String> sendToDialogflow(String text) async {
   try {
     final jsonKey = await rootBundle.loadString('assets/dialogflow_key.json');
@@ -335,7 +333,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             ),
           ),
 
-          // Messages list
+          
           Expanded(
             child: ListView.builder(
               controller: _scrollController,

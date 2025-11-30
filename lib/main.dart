@@ -8,7 +8,6 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/theme/app_theme.dart';
 import 'package:dlsud_go/screens/splash/splash_screen.dart';
-import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 void main() async {
@@ -45,7 +44,6 @@ void main() async {
   final settingsService = SettingsService();
   await settingsService.loadSettings();
 
-  // 7. WRAP YOUR APP WITH EasyLocalization
   runApp(
     EasyLocalization(
       supportedLocales: const [Locale('en', 'US'), Locale('tl', 'PH')],
