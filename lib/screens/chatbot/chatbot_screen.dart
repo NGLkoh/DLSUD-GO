@@ -1,60 +1,11 @@
 // lib/screens/chatbot/chatbot_screen.dart
 import 'dart:async';
-import 'dart:convert';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:googleapis_auth/auth_io.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
 import '../../core/theme/app_colors.dart';
 import '../../models/chat_message.dart';
-
-Future<String> sendToDialogflow(String text) async {
-  try {
-    final jsonKey = await rootBundle.loadString('assets/dialogflow_key.json');
-    final Map<String, dynamic> keyMap = jsonDecode(jsonKey);
-
-    final String projectId = keyMap["project_id"];
-
-    final credentials = ServiceAccountCredentials.fromJson(jsonKey);
-
-    final client = await clientViaServiceAccount(
-      credentials,
-      ['https://www.googleapis.com/auth/cloud-platform'],
-    );
-
-    final url =
-        "https://dialogflow.googleapis.com/v2/projects/$projectId/agent/sessions/flutter-session:detectIntent";
-
-    final response = await client.post(
-      Uri.parse(url),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode({
-        "queryInput": {
-          "text": {"text": text, "languageCode": "en"}
-        }
-      }),
-    );
-
-    client.close();
-
-    final data = jsonDecode(response.body);
-
-    // Debug print
-    print("DF RESPONSE: ${response.body}");
-
-    final queryResult = data["queryResult"];
-
-    if (queryResult == null) {
-      return "I'm having trouble connecting. Try again.";
-    }
-
-    return queryResult["fulfillmentText"] ?? "I couldn't understand that.";
-
-  } catch (e) {
-    print("ERROR: $e");
-    return "I can't connect to the server right now.";
-  }
-}
 
 class ChatbotScreen extends StatefulWidget {
   const ChatbotScreen({super.key});
@@ -67,37 +18,103 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
+  
   bool _isTyping = false;
   late StreamSubscription<List<ConnectivityResult>> _connectivitySubscription;
   bool _isConnected = true;
 
-
+  // --- GEMINI AI CONFIGURATION ---
+  late final GenerativeModel _model;
+  late final ChatSession _chatSession;
 
   @override
   void initState() {
     super.initState();
-    _addWelcomeMessage();
     _checkConnectivity();
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(_updateConnectionStatus);
+    
+    // 1. Initialize Gemini
+    _initGemini();
+    
+    // 2. Add Welcome Message
+    _addWelcomeMessage();
   }
 
-  Future<void> _initializeDialogflow() async {
-    try {
-      final String response = await rootBundle.loadString('assets/dialogflow_key.json');
-      final data = json.decode(response);
-
-    } catch (e) {
-      if (mounted) {
-        final botResponse = ChatMessage(
-          text: 'Initialization Error: ${e.toString()}',
-          isUser: false,
-          timestamp: DateTime.now(),
-        );
-        setState(() {
-          _messages.add(botResponse);
-        });
-      }
+  void _initGemini() {
+    // Ideally use dotenv, but fallback to hardcode for testing if needed
+    final apiKey = dotenv.env['GEMINI_API_KEY'] ?? 'YOUR_API_KEY_HERE'; 
+    
+    if (apiKey.isEmpty || apiKey == 'YOUR_API_KEY_HERE') {
+      debugPrint("❌ No API Key provided.");
+      return;
     }
+
+    // --- EXPANDED KNOWLEDGE BASE FOR LILY ---
+    const String appKnowledge = '''
+    You are Lily, the official AI campus guide for the "DLSU-D Go" mobile application.
+    Your Persona: Friendly, spirited, helpful, and polite. Always address the user as "Patriot".
+    
+    **OFFICIAL APP SECTIONS & INFORMATION:**
+    
+    **1. ADMISSIONS:**
+    "Welcome to De La Salle University-Dasmariñas — a Lasallian institution that blends academic excellence with character formation."
+    - Lily's Role: Assist with inquiries about entrance exams, application requirements, and scholarships. Remind users that official applications are processed via the School Automate portal.
+
+    **2. ACADEMIC PROGRAMS:**
+    "De La Salle University-Dasmariñas offers academic programs designed to match global standards and industry needs."
+    - Colleges: College of Science (COS), College of Engineering (CEAT), College of Business (CBA), College of Liberal Arts (CLA), College of Education (COED), College of Tourism (CTHM), and College of Criminal Justice Education (CCJE).
+
+    **3. RESEARCH:**
+    "De La Salle University-Dasmariñas (DLSU-D) promotes a strong culture of research and development."
+    - Key Hub: The University Research Office (URO).
+
+    **4. GLOBAL LINKAGES:**
+    "Engage in international linkages and exchange student programs."
+    - Opportunities: Student exchange programs, international internships, and global partnerships.
+
+    **5. ABOUT DLSU-D (Campus Info):**
+    "De La Salle University-Dasmariñas (DLSU-D) is a private Catholic university in Cavite founded by the De La Salle Brothers. Established in 1977, it stands as one of the largest Lasallian institutions in the Philippines."
+
+    **APP FEATURES:**
+    - **Navigation:** Navigate around campus with interactive maps to find buildings, offices, and student services easily. Locations are categorized into "East Campus" and "West Campus".
+    - **Virtual Tours:** Users can view 360-degree panoramas of key buildings by selecting them on the map.
+    - **Dashboard:** Provides quick access to Maps, Chatbot, and Campus Information.
+    
+    **CAMPUS LOCATIONS CHEATSHEET:**
+    
+    **EAST CAMPUS:**
+    - **Aklatang Emilio Aguinaldo (IRC):** The main university library.
+    - **Ayuntamiento de Gonzales Hall (AGH):** The main administrative building (Admissions, Registrar).
+    - **Julian Felipe Hall (JFH):** Main academic building with classrooms.
+    - **Museo De La Salle:** The university museum showcasing lifestyle of the 19th century.
+    - **Hotel Rafael / Gourmet / Centennial:** Event venues and hospitality training centers.
+    - **ICTC:** Information & Communications Technology Center (Tech support).
+    - **College of Science (COS):** Academic building for science programs.
+    - **Gate 1 (Magdalo):** The main entrance gate.
+    
+    **WEST CAMPUS:**
+    - **Ugnayang La Salle (ULS):** The sports complex and gym.
+    - **Grandstand & Track Oval:** For sports and PE classes.
+    - **University Chapel:** Located centrally near the lake/bridge.
+    - **University Food Square:** The main dining area.
+    - **Candido Tirona Hall (CTH):** Academic building.
+    - **Gregoria Montoya Hall (GMH):** Administration/Academic building.
+    - **Gate 3 (Magdiwang):** Entrance near the sports complex.
+    - **Bahay Pag-asa:** Center for youth in conflict with the law.
+    
+    **INSTRUCTIONS:**
+    - If asked about "Admissions", "Programs", or "Research", quote the official descriptions above.
+    - If asked for directions, guide them to use the "Maps" tab in the app.
+    - Keep answers concise and helpful.
+    ''';
+
+    _model = GenerativeModel(
+      model: 'gemini-2.5-flash', 
+      apiKey: apiKey,
+      systemInstruction: Content.system(appKnowledge),
+    );
+
+    _chatSession = _model.startChat();
   }
 
   @override
@@ -109,17 +126,15 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   }
 
   void _addWelcomeMessage() {
-    if (mounted) {
-      setState(() {
-        _messages.add(
-          ChatMessage(
-            text: 'Hi there, Patriot! 👋\n\nI\'m Lily, your friendly DLSU-D campus guide! I\'m here to help make your campus life easier. I can assist you with:\n\n🗺️ Campus navigation and directions\n🎓 Student services information\n📚 Academic programs and requirements\n🏢 Office locations and hours\n❓ General campus questions\n\nFeel free to ask me anything about DLSU-D! What can I help you with today?',
-            isUser: false,
-            timestamp: DateTime.now(),
-          ),
-        );
-      });
-    }
+    setState(() {
+      _messages.add(
+        ChatMessage(
+          text: 'Hi there, Patriot! 👋\n\nI\'m Lily, your DLSU-D Go guide! I can tell you about our Admissions, Academic Programs, Research culture, or help you navigate the campus.\n\nWhat would you like to know?',
+          isUser: false,
+          timestamp: DateTime.now(),
+        ),
+      );
+    });
   }
 
   Future<void> _sendMessage(String text) async {
@@ -131,64 +146,62 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
       timestamp: DateTime.now(),
     );
 
-    if (mounted) {
-      setState(() {
-        _messages.add(userMessage);
-        _isTyping = true;
-      });
-    }
+    setState(() {
+      _messages.add(userMessage);
+      _isTyping = true;
+    });
 
     _messageController.clear();
     _scrollToBottom();
 
     if (!_isConnected) {
-      final botResponse = ChatMessage(
-        text: 'You are offline. Please check your connection.',
-        isUser: false,
-        timestamp: DateTime.now(),
-      );
-      if(mounted) {
-        setState(() {
-          _messages.add(botResponse);
-          _isTyping = false;
-        });
-      }
+      _handleError('You are offline. Please check your connection.');
       return;
     }
 
     try {
-      // CALL DIALOGFLOW REST API
-      String fulfillmentText = await sendToDialogflow(text.trim());
-
-      final botResponse = ChatMessage(
-        text: fulfillmentText.isEmpty
-            ? "I'm sorry, I couldn't understand that. Can you rephrase?"
-            : fulfillmentText,
-        isUser: false,
-        timestamp: DateTime.now(),
+      final response = await _chatSession.sendMessage(
+        Content.text(text.trim()),
       );
 
-      if (mounted) {
-        setState(() {
-          _messages.add(botResponse);
-          _isTyping = false;
-        });
+      final botText = response.text;
+
+      if (botText == null) {
+        _handleError("I'm having trouble thinking right now.");
+        return;
       }
+
+      setState(() {
+        _messages.add(ChatMessage(
+          text: botText,
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+        _isTyping = false;
+      });
+
     } catch (e) {
-      final botResponse = ChatMessage(
-        text: 'Connection Error: ${e.toString()}',
-        isUser: false,
-        timestamp: DateTime.now(),
-      );
-
-      if (mounted) {
-        setState(() {
-          _messages.add(botResponse);
-          _isTyping = false;
-        });
+      String errorMsg = "Sorry, I can't connect right now.";
+      if (e.toString().contains("404")) {
+        errorMsg = "Configuration Error: AI Model not found. Please check API settings.";
+      } else if (e.toString().contains("API key")) {
+        errorMsg = "Authentication Error: Invalid API Key.";
       }
+      _handleError(errorMsg);
     }
 
+    _scrollToBottom();
+  }
+
+  void _handleError(String msg) {
+    setState(() {
+      _messages.add(ChatMessage(
+        text: msg,
+        isUser: false,
+        timestamp: DateTime.now(),
+      ));
+      _isTyping = false;
+    });
     _scrollToBottom();
   }
 
@@ -204,6 +217,7 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
     });
   }
 
+  // --- CONNECTIVITY HELPERS ---
   Future<void> _checkConnectivity() async {
     final List<ConnectivityResult> connectivityResult = await Connectivity().checkConnectivity();
     _updateConnectionStatus(connectivityResult);
@@ -215,50 +229,34 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
         _isConnected = !results.contains(ConnectivityResult.none);
       });
     }
-    if (!_isConnected) {
-      _showConnectivitySnackBar();
-    }
   }
 
-  void _showConnectivitySnackBar() {
-    if(mounted) {
-      final snackBar = SnackBar(
-        content: const Text('You are offline. Please check your connection.'),
-        backgroundColor: Colors.red,
-        duration: const Duration(seconds: 3),
-      );
-      ScaffoldMessenger.of(context).showSnackBar(snackBar);
-    }
-  }
-
+  // --- UI BUILD (Standard Chat Interface) ---
   @override
   Widget build(BuildContext context) {
-    // 🔑 Detect dark mode
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode ? Colors.grey[900] : Colors.white;
-    final surfaceColor = isDarkMode ? Colors.grey[850] : AppColors.surfaceColor;
-    final textColor = isDarkMode ? Colors.white : AppColors.textDark;
+    final backgroundColor = isDarkMode ? Colors.grey[900] : AppColors.backgroundColor;
 
     return Scaffold(
-      backgroundColor: isDarkMode ? Colors.grey[900] : AppColors.backgroundColor,
+      backgroundColor: backgroundColor,
       appBar: AppBar(
         title: Row(
           children: [
             const CircleAvatar(
               backgroundColor: AppColors.primaryGreen,
-              radius: 20,
-              child: Icon(Icons.favorite, color: Colors.white, size: 22),
+              radius: 18,
+              child: Icon(Icons.auto_awesome, color: Colors.white, size: 20),
             ),
             const SizedBox(width: 12),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Lily',
+                  'Lily (AI)',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.primaryGreen),
                 ),
                 Text(
-                  'Your campus guide',
+                  'Powered by Gemini',
                   style: TextStyle(
                       fontSize: 11,
                       color: isDarkMode ? Colors.grey[400] : AppColors.textMedium,
@@ -269,87 +267,27 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
             ),
           ],
         ),
-        backgroundColor: backgroundColor,
+        backgroundColor: isDarkMode ? Colors.grey[850] : Colors.white,
         elevation: 2,
         actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              switch (value) {
-                case 'clear':
-                  _showClearChatDialog();
-                  break;
-                case 'help':
-                  _showHelpDialog();
-                  break;
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'clear',
-                child: Row(
-                  children: [
-                    Icon(Icons.clear_all),
-                    SizedBox(width: 8),
-                    Text('Clear Chat'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'help',
-                child: Row(
-                  children: [
-                    Icon(Icons.help_outline),
-                    SizedBox(width: 8),
-                    Text('Help'),
-                  ],
-                ),
-              ),
-            ],
+          IconButton(
+            icon: const Icon(Icons.delete_outline),
+            onPressed: _showClearChatDialog,
+            tooltip: 'Clear Chat',
           ),
         ],
       ),
       body: Column(
         children: [
-          // Language toggle (placeholder for future implementation)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: surfaceColor,
-            child: Row(
-              children: [
-                Icon(
-                    Icons.language,
-                    size: 16,
-                    color: isDarkMode ? Colors.grey[400] : AppColors.textMedium
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'English/Filipino support available',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDarkMode ? Colors.grey[400] : AppColors.textMedium,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
               padding: const EdgeInsets.all(16),
               itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final message = _messages[index];
-                return _buildMessageBubble(message);
-              },
+              itemBuilder: (context, index) => _buildMessageBubble(_messages[index]),
             ),
           ),
-
-          // Typing indicator
           if (_isTyping) _buildTypingIndicator(),
-
-          // Message input
           _buildMessageInput(),
         ],
       ),
@@ -359,348 +297,103 @@ class _ChatbotScreenState extends State<ChatbotScreen> {
   Widget _buildMessageBubble(ChatMessage message) {
     final isUser = message.isUser;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final bubbleColor = isUser 
+        ? (isDarkMode ? Colors.green[700] : AppColors.chatUserBubble) 
+        : (isDarkMode ? Colors.grey[800] : AppColors.chatBotBubble);
+    final textColor = isUser ? Colors.white : (isDarkMode ? Colors.white : AppColors.textDark);
 
-    // Dynamic colors for chat bubbles
-    final userBubbleColor = isDarkMode ? Colors.green[700] : AppColors.chatUserBubble;
-    final botBubbleColor = isDarkMode ? Colors.grey[800] : AppColors.chatBotBubble;
-    final userTextColor = Colors.white;
-    final botTextColor = isDarkMode ? Colors.white : AppColors.textDark;
-    final timestampColor = isUser
-        ? Colors.white70
-        : (isDarkMode ? Colors.grey[400] : AppColors.textLight);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isUser) ...[
-            const CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.primaryGreen,
-              child: Icon(Icons.favorite, size: 16, color: Colors.white),
-            ),
-            const SizedBox(width: 8),
-          ],
-
-          Flexible(
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: isUser ? userBubbleColor : botBubbleColor,
-                borderRadius: BorderRadius.circular(18).copyWith(
-                  bottomLeft: isUser ? const Radius.circular(18) : const Radius.circular(4),
-                  bottomRight: isUser ? const Radius.circular(4) : const Radius.circular(18),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    message.text,
-                    style: TextStyle(
-                      color: isUser ? userTextColor : botTextColor,
-                      fontSize: 15,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatTime(message.timestamp),
-                    style: TextStyle(
-                      color: timestampColor,
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        padding: const EdgeInsets.all(12),
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+        decoration: BoxDecoration(
+          color: bubbleColor,
+          borderRadius: BorderRadius.circular(16).copyWith(
+            bottomRight: isUser ? Radius.zero : const Radius.circular(16),
+            bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
           ),
-
-          if (isUser) ...[
-            const SizedBox(width: 8),
-            const CircleAvatar(
-              radius: 16,
-              backgroundColor: AppColors.accentBlue,
-              child: Icon(Icons.person, size: 16, color: Colors.white),
-            ),
-          ],
-        ],
+        ),
+        child: Text(
+          message.text,
+          style: TextStyle(color: textColor, fontSize: 15),
+        ),
       ),
     );
   }
 
   Widget _buildTypingIndicator() {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final bubbleColor = isDarkMode ? Colors.grey[800] : AppColors.chatBotBubble;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
       child: Row(
         children: [
-          const CircleAvatar(
-            radius: 12,
-            backgroundColor: AppColors.primaryGreen,
-            child: Icon(Icons.favorite, size: 12, color: Colors.white),
+          const SizedBox(width: 8),
+          const SizedBox(
+            width: 16, height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
           const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: bubbleColor,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _buildDot(0),
-                const SizedBox(width: 4),
-                _buildDot(1),
-                const SizedBox(width: 4),
-                _buildDot(2),
-              ],
-            ),
-          ),
+          Text("Lily is thinking...", style: TextStyle(color: Colors.grey[600], fontSize: 12)),
         ],
       ),
-    );
-  }
-
-  Widget _buildDot(int index) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 600 + (index * 200)),
-      builder: (context, value, child) {
-        return Transform.scale(
-          scale: 0.5 + (0.5 * value),
-          child: Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-              color: AppColors.primaryGreen.withOpacity(0.7),
-              shape: BoxShape.circle,
-            ),
-          ),
-        );
-      },
-      onEnd: () {
-        // Restart animation for continuous loop
-        if (mounted) {
-          setState(() {});
-        }
-      },
     );
   }
 
   Widget _buildMessageInput() {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor = isDarkMode ? Colors.grey[850] : Colors.white;
-    final inputColor = isDarkMode ? Colors.grey[800] : AppColors.surfaceColor;
-    final textColor = isDarkMode ? Colors.white : AppColors.textDark;
-
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(isDarkMode ? 0.2 : 0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
+      color: isDarkMode ? Colors.grey[850] : Colors.white,
       child: Row(
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: inputColor,
-                borderRadius: BorderRadius.circular(25),
+            child: TextField(
+              controller: _messageController,
+              textCapitalization: TextCapitalization.sentences,
+              style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+              decoration: InputDecoration(
+                hintText: 'Ask Lily anything...',
+                hintStyle: TextStyle(color: Colors.grey[500]),
+                filled: true,
+                fillColor: isDarkMode ? Colors.grey[800] : Colors.grey[100],
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(24), borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               ),
-              child: TextField(
-                controller: _messageController,
-                maxLines: null,
-                style: TextStyle(color: textColor),
-                decoration: InputDecoration(
-                  hintText: 'Type message',
-                  hintStyle: TextStyle(
-                    color: isDarkMode ? Colors.grey[500] : Colors.grey[600],
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                ),
-                onSubmitted: _sendMessage,
-              ),
+              onSubmitted: _sendMessage,
             ),
           ),
-
-          const SizedBox(width: 12),
-
-          FloatingActionButton(
-            mini: true,
+          const SizedBox(width: 8),
+          CircleAvatar(
             backgroundColor: AppColors.primaryGreen,
-            onPressed: () => _sendMessage(_messageController.text),
-            child: const Icon(Icons.send, color: Colors.white, size: 20),
+            child: IconButton(
+              icon: const Icon(Icons.send, color: Colors.white, size: 20),
+              onPressed: () => _sendMessage(_messageController.text),
+            ),
           ),
         ],
       ),
     );
   }
 
-  String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inMinutes < 1) {
-      return 'Now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else {
-      return '${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
-    }
-  }
-
   void _showClearChatDialog() {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDarkMode ? Colors.grey[850] : null,
-        title: Text(
-          'Clear Chat',
-          style: TextStyle(color: isDarkMode ? Colors.white : null),
-        ),
-        content: Text(
-          'Are you sure you want to clear all messages?',
-          style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-        ),
+      builder: (ctx) => AlertDialog(
+        title: const Text("Clear Chat?"),
+        content: const Text("This will start a new conversation context."),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: isDarkMode ? Colors.grey[400] : null),
-            ),
-          ),
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Cancel")),
           TextButton(
             onPressed: () {
               setState(() {
                 _messages.clear();
+                _chatSession = _model.startChat();
               });
-              Navigator.pop(context);
+              Navigator.pop(ctx);
               _addWelcomeMessage();
             },
-            child: const Text(
-              'Clear',
-              style: TextStyle(color: AppColors.primaryGreen),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showHelpDialog() {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: isDarkMode ? Colors.grey[850] : null,
-        title: const Row(
-          children: [
-            Icon(Icons.favorite, color: AppColors.primaryGreen),
-            SizedBox(width: 8),
-            Text('Lily\'s Guide'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '✨ What Lily can help with:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isDarkMode ? Colors.white : null,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '🗺️ Campus navigation and directions',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '📚 Student services & academic info',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '🏢 Office locations and hour',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '💳 Payment and enrollment details',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '🎓 Academic programs and courses',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '❓ General campus questions',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                '💡 Tips for better results:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                  color: isDarkMode ? Colors.white : null,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                '• Ask specific, clear questions',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '• Use keywords like "payment", "directions"',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '• Ask in English or Filipino',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '• Try rephrasing if unsure',
-                style: TextStyle(color: isDarkMode ? Colors.grey[300] : null),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Got it! 👍',
-              style: TextStyle(color: AppColors.primaryGreen),
-            ),
+            child: const Text("Clear", style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
