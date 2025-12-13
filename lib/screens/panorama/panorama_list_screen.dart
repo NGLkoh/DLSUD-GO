@@ -6,7 +6,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image/image.dart' as img;
 import 'panorama_view_screen.dart';
 import 'package:dlsud_go/models/campus_location.dart';
-// desktop_drop import is no longer needed
 
 class PanoramaListScreen extends StatefulWidget {
   const PanoramaListScreen({super.key});
@@ -20,15 +19,12 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
   bool _isUploading = false;
   String _uploadStatus = '';
   Map<String, String> _locationPanoramaUrls = {}; // Cache for location panoramas
-  // bool _dragging = false; // State for desktop_drop removed
 
   @override
   void initState() {
     super.initState();
     _loadPanoramaUrls();
   }
-
-  // The _handleDroppedFiles function is no longer needed
 
   // Load all panorama URLs from Firebase
   Future<void> _loadPanoramaUrls() async {
@@ -38,7 +34,7 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
         _locationPanoramaUrls = urls;
       });
     } catch (e) {
-      print('Error loading panorama URLs: $e');
+      debugPrint('Error loading panorama URLs: $e');
     }
   }
 
@@ -193,8 +189,8 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
 
       final publicUrl = supabase.storage.from("panoramas").getPublicUrl(fileName);
 
-      print('✓ Uploaded: $fileName');
-      print('✓ Public URL: $publicUrl');
+      debugPrint('✓ Uploaded: $fileName');
+      debugPrint('✓ Public URL: $publicUrl');
 
       // Save to database (only using existing columns)
       try {
@@ -204,10 +200,10 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
           "collection_id": collectionId,
         }).select();
 
-        print('✓ Database insert response: $response');
-        print('✓ Saved to database with collection_id: $collectionId');
+        debugPrint('✓ Database insert response: $response');
+        debugPrint('✓ Saved to database with collection_id: $collectionId');
       } catch (dbError) {
-        print('❌ Database insert failed: $dbError');
+        debugPrint('❌ Database insert failed: $dbError');
         throw Exception('Database insert failed: $dbError');
       }
 
@@ -283,9 +279,9 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
         );
       }
 
-      print('✓ Panorama URL saved to Firebase for location: $locationId');
-      print('✓ Location name: $locationName');
-      print('✓ URL: $panoramaUrl');
+      debugPrint('✓ Panorama URL saved to Firebase for location: $locationId');
+      debugPrint('✓ Location name: $locationName');
+      debugPrint('✓ URL: $panoramaUrl');
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -295,7 +291,7 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
           ),
         );
       }
-      print('❌ Failed to save to Firebase: $e');
+      debugPrint('❌ Failed to save to Firebase: $e');
     } finally {
       setState(() {
         _isUploading = false;
@@ -321,7 +317,6 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
         )
             : const Icon(Icons.add_photo_alternate),
       ),
-      // --- CHANGE: DropTarget wrapper removed ---
       body: StreamBuilder<List<Map<String, dynamic>>>(
         stream: supabase
             .from("panoramas")
@@ -454,7 +449,7 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
                                     const SizedBox(width: 4),
                                     Text(
                                       CampusLocation.allLocations
-                                          .firstWhere((loc) => loc.id == assignedLocation)
+                                          .firstWhere((loc) => loc.id == assignedLocation, orElse: () => CampusLocation(id: 'unknown', name: 'Unknown', description: '', latitude: 0, longitude: 0, icon: Icons.error, section: CampusSection.east))
                                           .name
                                           .split(' ')
                                           .take(2)
@@ -488,7 +483,7 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    "$imageCount image${imageCount > 1 ? 's' : ''} • Optimized JPEG",
+                                    "Optimized JPEG",
                                     style: TextStyle(
                                       color: Colors.grey[600],
                                       fontSize: 13,
@@ -497,7 +492,7 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
                                   if (assignedLocation != null) ...[
                                     const SizedBox(height: 4),
                                     Text(
-                                      "Assigned to: ${CampusLocation.allLocations.firstWhere((loc) => loc.id == assignedLocation).name}",
+                                      "Assigned to: ${CampusLocation.allLocations.firstWhere((loc) => loc.id == assignedLocation, orElse: () => CampusLocation(id: 'unknown', name: 'Unknown', description: '', latitude: 0, longitude: 0, icon: Icons.error, section: CampusSection.east)).name}",
                                       style: TextStyle(
                                         color: Colors.blue[700],
                                         fontSize: 12,
@@ -507,6 +502,81 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
                                   ],
                                 ],
                               ),
+                            ),
+                            // 🚀 FIX: Uncommented and fixed the Assign Location Button
+                            IconButton(
+                              icon: Icon(
+                                assignedLocation != null ? Icons.edit_location : Icons.location_on,
+                                color: assignedLocation != null ? Colors.green : Colors.blue,
+                              ),
+                              tooltip: assignedLocation != null
+                                  ? "Change Location"
+                                  : "Set to Campus Location",
+                              onPressed: () async {
+                                final selected = await showDialog<CampusLocation>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text("Select Campus Location"),
+                                    content: SizedBox(
+                                      width: double.maxFinite,
+                                      height: 300,
+                                      child: ListView(
+                                        children: CampusLocation.allLocations.map((location) {
+                                          final isCurrentlyAssigned = assignedLocation == location.id;
+                                          // Check if another panorama uses this location
+                                          final hasOtherPanorama = _locationPanoramaUrls[location.id] != null &&
+                                              !isCurrentlyAssigned;
+
+                                          return ListTile(
+                                            title: Text(location.name),
+                                            subtitle: Text(location.description),
+                                            trailing: isCurrentlyAssigned
+                                                ? const Icon(Icons.check_circle, color: Colors.green)
+                                                : hasOtherPanorama
+                                                ? const Icon(Icons.warning, color: Colors.orange)
+                                                : null,
+                                            onTap: () => Navigator.pop(context, location),
+                                          );
+                                        }).toList(),
+                                      ),
+                                    ),
+                                  ),
+                                );
+
+                                if (selected != null) {
+                                  // Check if location already has a panorama
+                                  final existingUrl = _locationPanoramaUrls[selected.id];
+                                  if (existingUrl != null && existingUrl != coverImage) {
+                                    final replace = await showDialog<bool>(
+                                      context: context,
+                                      builder: (context) => AlertDialog(
+                                        title: const Text("Replace Existing Panorama?"),
+                                        content: Text(
+                                          "${selected.name} already has a panorama assigned. Do you want to replace it?",
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context, false),
+                                            child: const Text("Cancel"),
+                                          ),
+                                          TextButton(
+                                            onPressed: () => Navigator.pop(context, true),
+                                            child: const Text("Replace"),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                    if (replace != true) return;
+                                  }
+
+                                  // Assign panorama to the selected location
+                                  await _assignPanoramaToLocation(
+                                    selected.id,
+                                    selected.name,
+                                    coverImage,
+                                  );
+                                }
+                              },
                             ),
                             IconButton(
                               icon: const Icon(Icons.delete, color: Colors.red),
@@ -533,79 +603,6 @@ class _PanoramaListScreenState extends State<PanoramaListScreen> {
                                 }
                               },
                             ),
-                            // IconButton(
-                            //   icon: Icon(
-                            //     assignedLocation != null ? Icons.edit_location : Icons.location_on,
-                            //     color: assignedLocation != null ? Colors.green : Colors.blue,
-                            //   ),
-                            //   tooltip: assignedLocation != null
-                            //       ? "Change Location"
-                            //       : "Set to Campus Location",
-                            //   onPressed: () async {
-                            //     final selected = await showDialog<CampusLocation>(
-                            //       context: context,
-                            //       builder: (context) => AlertDialog(
-                            //         title: const Text("Select Campus Location"),
-                            //         content: SizedBox(
-                            //           width: double.maxFinite,
-                            //           height: 300,
-                            //           child: ListView(
-                            //             children: CampusLocation.allLocations.map((location) {
-                            //               final isCurrentlyAssigned = assignedLocation == location.id;
-                            //               final hasOtherPanorama = _locationPanoramaUrls[location.id] != null &&
-                            //                   !isCurrentlyAssigned;
-                            //
-                            //               return ListTile(
-                            //                 title: Text(location.name),
-                            //                 subtitle: Text(location.description),
-                            //                 trailing: isCurrentlyAssigned
-                            //                     ? const Icon(Icons.check_circle, color: Colors.green)
-                            //                     : hasOtherPanorama
-                            //                     ? const Icon(Icons.warning, color: Colors.orange)
-                            //                     : null,
-                            //                 onTap: () => Navigator.pop(context, location),
-                            //               );
-                            //             }).toList(),
-                            //           ),
-                            //         ),
-                            //       ),
-                            //     );
-                            //
-                            //     if (selected != null) {
-                            //       // Check if location already has a panorama
-                            //       final existingUrl = _locationPanoramaUrls[selected.id];
-                            //       if (existingUrl != null && existingUrl != coverImage) {
-                            //         final replace = await showDialog<bool>(
-                            //           context: context,
-                            //           builder: (context) => AlertDialog(
-                            //             title: const Text("Replace Existing Panorama?"),
-                            //             content: Text(
-                            //               "${selected.name} already has a panorama assigned. Do you want to replace it?",
-                            //             ),
-                            //             actions: [
-                            //               TextButton(
-                            //                 onPressed: () => Navigator.pop(context, false),
-                            //                 child: const Text("Cancel"),
-                            //               ),
-                            //               TextButton(
-                            //                 onPressed: () => Navigator.pop(context, true),
-                            //                 child: const Text("Replace"),
-                            //               ),
-                            //             ],
-                            //           ),
-                            //         );
-                            //         if (replace != true) return;
-                            //       }
-                            //
-                            //       // Assign panorama to the selected location
-                            //       await _assignPanoramaToLocation(
-                            //         selected.id,
-                            //         selected.name,
-                            //         coverImage,
-                            //       );
-                            //     }
-                            //   },
-                            // ),
                           ],
                         ),
                       )
