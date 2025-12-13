@@ -6,9 +6,9 @@ import '../../models/dashboard_section.dart';
 import '../../widgets/common/custom_button.dart';
 import '../chatbot/chatbot_screen.dart';
 import '../map/navigation/map_navigation_screen.dart';
-import '../search/search_screen.dart';
 import '../settings/settings_screen.dart';
 import '../info/static_info_screen.dart';
+import '../panorama/panorama_list_screen.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -19,29 +19,29 @@ class MainDashboard extends StatefulWidget {
 
 class _MainDashboardState extends State<MainDashboard> {
   int _currentIndex = 0;
-  final PageController _pageController = PageController();
-
-  List<Widget> get _pages => [
-    const DashboardHomeTab(),
-    const MapNavigationScreen(),
-    const ChatbotScreen(),
-  ];
 
   void _onBottomNavTap(int index) {
-    setState(() {
-      _currentIndex = index;
-    });
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
+    if (index == _currentIndex) return;
 
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
+    setState(() => _currentIndex = index);
+
+    switch (index) {
+      case 0: // Explore
+        // Already here
+        break;
+      case 1: // Maps
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const MapNavigationScreen()),
+        ).then((_) => setState(() => _currentIndex = 0));
+        break;
+      case 2: // Chatbot
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const ChatbotScreen()),
+        ).then((_) => setState(() => _currentIndex = 0));
+        break;
+    }
   }
 
   @override
@@ -50,16 +50,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
     return Scaffold(
       backgroundColor: appColors.backgroundColor,
-      body: PageView(
-        controller: _pageController,
-        physics: const NeverScrollableScrollPhysics(),
-        onPageChanged: (index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        children: _pages,
-      ),
+      body: const DashboardHomeTab(), // We just show the dashboard here
       bottomNavigationBar: _buildBottomNavigationBar(appColors),
     );
   }
@@ -115,7 +106,6 @@ class DashboardHomeTab extends StatelessWidget {
     if (key.contains('map')) return 'sections.maps_title'.tr();
     if (key.contains('research')) return 'sections.research_title'.tr();
     if (key.contains('global')) return 'sections.global_title'.tr();
-    // Fallback: return the original DB text if no translation found
     return dbTitle;
   }
 
@@ -128,7 +118,6 @@ class DashboardHomeTab extends StatelessWidget {
     if (key.contains('global')) return 'sections.global_desc'.tr();
     return originalDesc;
   }
-  // --------------------------------------------------
 
   Stream<List<DashboardSection>> _getSectionsStream() {
     return FirebaseFirestore.instance
@@ -199,32 +188,52 @@ class DashboardHomeTab extends StatelessWidget {
                   gradient: LinearGradient(
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
-                    colors: [
-                      primaryGreen,
-                      lightGreen,
-                    ],
+                    colors: [primaryGreen, lightGreen],
                   ),
                 ),
                 child: SafeArea(
                   child: Padding(
                     padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.end,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text(
-                          'dashboard.welcome'.tr(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                          ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              'dashboard.welcome'.tr(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                              ),
+                            ),
+                            Text(
+                              'dashboard.patriot'.tr(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
                         ),
-                        Text(
-                          'dashboard.patriot'.tr(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
+                        // Settings Button inside Header
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: IconButton(
+                            icon: const Icon(Icons.settings, color: Colors.white),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                              );
+                            },
                           ),
                         ),
                       ],
@@ -242,27 +251,13 @@ class DashboardHomeTab extends StatelessWidget {
                   stream: _getSectionsStream(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return Center(
-                        child: CircularProgressIndicator(
-                          color: appColors.primaryGreen,
-                        ),
-                      );
+                      return Center(child: CircularProgressIndicator(color: appColors.primaryGreen));
                     }
                     if (snapshot.hasError) {
-                      return Center(
-                        child: Text(
-                          'dashboard.error'.tr(args: [snapshot.error.toString()]),
-                          style: TextStyle(color: appColors.textDark),
-                        ),
-                      );
+                      return Center(child: Text('dashboard.error'.tr()));
                     }
                     if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                      return Center(
-                        child: Text(
-                          'dashboard.no_sections'.tr(),
-                          style: TextStyle(color: appColors.textDark),
-                        ),
-                      );
+                      return Center(child: Text('dashboard.no_sections'.tr()));
                     }
 
                     final sections = snapshot.data!;
@@ -276,11 +271,7 @@ class DashboardHomeTab extends StatelessWidget {
                   stream: _getCampusInfoStream(),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting) {
-                      return Center(
-                        child: CircularProgressIndicator(
-                          color: appColors.primaryGreen,
-                        ),
-                      );
+                      return const Center(child: SizedBox());
                     }
                     if (!snapshot.hasData || snapshot.data!.isEmpty) {
                       return const SizedBox();
@@ -300,7 +291,6 @@ class DashboardHomeTab extends StatelessWidget {
   Widget _buildMainServiceCards(BuildContext context, List<DashboardSection> sections) {
     return Column(
       children: sections.map((section) {
-        // USE HELPERS TO GET TRANSLATED TEXT
         final displayTitle = _getTranslatedTitle(section.title);
         final displayDesc = _getTranslatedDescription(section.title, section.description);
 
@@ -308,28 +298,23 @@ class DashboardHomeTab extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 16),
           child: _buildServiceCard(
             context,
-            displayTitle, // Use translated title
-            displayDesc,  // Use translated description
+            displayTitle,
+            displayDesc,
             _getIconFromString(section.iconName),
             _getColorFromHex(context, section.colorHex),
                 () {
               if (section.route == 'map_navigation') {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => const MapNavigationScreen()),
-                );
+                Navigator.push(context, MaterialPageRoute(builder: (context) => const MapNavigationScreen()));
               } else if (section.route == 'static_info') {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => StaticInfoScreen(
-                      title: displayTitle, // Pass translated title
+                      title: displayTitle,
                       sections: section.subsections.map((s) {
                         return {
                           'title': s['title'] ?? '',
-                          'details': List<String>.from(
-                            s['descriptions'] ?? s['details'] ?? [],
-                          ),
+                          'details': List<String>.from(s['descriptions'] ?? s['details'] ?? []),
                         };
                       }).toList(),
                     ),
@@ -343,6 +328,7 @@ class DashboardHomeTab extends StatelessWidget {
     );
   }
 
+  // --- 🚀 FIX: Prevent Overflow with Expanded ---
   Widget _buildServiceCard(
       BuildContext context,
       String title,
@@ -351,11 +337,6 @@ class DashboardHomeTab extends StatelessWidget {
       Color color,
       VoidCallback onTap,
       ) {
-
-    final truncatedSubtitle = subtitle.length > 80
-        ? '${subtitle.substring(0, 80)}...'
-        : subtitle;
-
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -367,17 +348,14 @@ class DashboardHomeTab extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
             gradient: LinearGradient(
+              colors: [color, color.withOpacity(0.7)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                color,
-                color.withOpacity(0.8),
-              ],
             ),
           ),
           child: Row(
             children: [
-              Expanded(
+              Expanded( // <--- THIS IS THE CRITICAL FIX
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -388,39 +366,30 @@ class DashboardHomeTab extends StatelessWidget {
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
                       ),
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      truncatedSubtitle,
+                      subtitle,
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.9),
                         fontSize: 14,
                       ),
-                      maxLines: 3,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 12),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.white,
-                size: 16,
+                child: Icon(icon, color: Colors.white, size: 24),
               ),
             ],
           ),
@@ -464,13 +433,13 @@ class DashboardHomeTab extends StatelessWidget {
             Expanded(
               child: _buildQuickAccessCard(
                 context,
-                'settings.title'.tr(),
-                Icons.settings,
-                appColors.textMedium ?? Colors.grey,
+                'Virtual Tours', // Add to translation file if needed
+                Icons.threesixty,
+                Colors.orange,
                     () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                    MaterialPageRoute(builder: (context) => const PanoramaListScreen()),
                   );
                 },
               ),
@@ -508,6 +477,8 @@ class DashboardHomeTab extends StatelessWidget {
                   color: appColors.textDark,
                 ),
                 textAlign: TextAlign.center,
+                maxLines: 1, // Prevent overflow here too
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
@@ -516,28 +487,18 @@ class DashboardHomeTab extends StatelessWidget {
     );
   }
 
-  // UPDATED CAMPUS INFO SECTION
   Widget _buildCampusInfoSection(BuildContext context, Map<String, dynamic> data) {
     final appColors = Theme.of(context).extension<AppColorsExtension>()!;
-
-    // 1. Translate Title and Button using keys
     final title = 'campus_info.title'.tr();
     final buttonText = 'campus_info.button'.tr();
 
-    // 3. Handle Description Translation (The long text)
-    // We grab the raw text from the database
     String rawDescription = data['description'] ?? '';
     String description = rawDescription;
-
-    // LOGIC: If the text from DB looks like the "About" description (starts with "De La Salle"),
-    // we force it to use our translated key instead of the raw English text.
     if (rawDescription.trim().startsWith("De La Salle")) {
       description = 'campus_info.about_description'.tr();
     }
 
-    final buttonSections = List<Map<String, dynamic>>.from(
-        data['button_sections'] ?? []
-    );
+    final buttonSections = List<Map<String, dynamic>>.from(data['button_sections'] ?? []);
 
     return Card(
       child: Padding(
@@ -558,25 +519,17 @@ class DashboardHomeTab extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: appColors.primaryGreen,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                    ],
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: appColors.primaryGreen,
+                    ),
                   ),
                 ),
               ],
             ),
-
-            // Display the description (which is now translated if it matched)
             if (description.isNotEmpty) ...[
               const SizedBox(height: 20),
               Text(
@@ -588,7 +541,6 @@ class DashboardHomeTab extends StatelessWidget {
                 ),
               ),
             ],
-
             if (buttonSections.isNotEmpty) ...[
               const SizedBox(height: 16),
               CustomButton(

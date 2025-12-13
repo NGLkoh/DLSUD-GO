@@ -5,7 +5,6 @@ import '../../services/settings_service.dart';
 import '../auth/admin_login_screen.dart';
 import '../feedback/feedback_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:dlsud_go/core/theme/app_colors.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

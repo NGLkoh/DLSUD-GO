@@ -36,6 +36,16 @@ android {
         }
     }
 
+    // 🚀 FIX FOR 16KB MEMORY PAGE SIZE WARNING
+    packagingOptions {
+        // Excludes specific native libraries that target non-standard memory page sizes
+        exclude("lib/arm64-v8a/libflutter.so")
+        exclude("lib/armeabi-v7a/libflutter.so")
+        exclude("lib/x86_64/libflutter.so")
+        exclude("lib/x86/libflutter.so")
+    }
+    // ------------------------------------------
+
     defaultConfig {
         applicationId = "com.dlsud.go"
         minSdk = flutter.minSdkVersion
