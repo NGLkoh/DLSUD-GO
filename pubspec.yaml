@@ -2,7 +2,7 @@ name: dlsud_go
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+2
+version: 1.0.3+3  # 🚀 UPDATED: Version Name is 1.0.3 and Code is 3
 
 environment:
   sdk: ^3.9.2
@@ -83,7 +83,6 @@ flutter:
 
   assets:
     - .env
-    # - assets/dialogflow_key.json  <-- REMOVED (Not needed for Gemini)
     - assets/images/
     - assets/translations/
     # Font assets
