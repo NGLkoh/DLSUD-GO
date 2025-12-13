@@ -64,7 +64,6 @@ flutter:
   generate: true
   uses-material-design: true
 
-  # Modern font families for enhanced typography
   fonts:
     - family: Poppins
       fonts:
