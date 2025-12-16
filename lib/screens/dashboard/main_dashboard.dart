@@ -219,23 +219,7 @@ class DashboardHomeTab extends StatelessWidget {
                             ),
                           ],
                         ),
-                        // Settings Button inside Header
-                        Container(
-                          margin: const EdgeInsets.only(bottom: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.settings, color: Colors.white),
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                              );
-                            },
-                          ),
-                        ),
+                        // Removed the Settings Container Button here
                       ],
                     ),
                   ),
@@ -430,16 +414,17 @@ class DashboardHomeTab extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
+            // --- 🚀 MODIFIED: Changed Virtual Tours to Settings ---
             Expanded(
               child: _buildQuickAccessCard(
                 context,
-                'Virtual Tours', // Add to translation file if needed
-                Icons.threesixty,
-                Colors.orange,
+                'Settings', // Changed Title
+                Icons.settings, // Changed Icon
+                Colors.blueGrey, // Changed Color (Professional Grey)
                     () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const PanoramaListScreen()),
+                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
                   );
                 },
               ),

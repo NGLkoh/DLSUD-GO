@@ -233,29 +233,19 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           },
                         ),
                         
-                        // B. The Logo
+                        // B. The Logo (FIXED: White background removed)
                         ScaleTransition(
                           scale: _logoScale,
                           child: FadeTransition(
                             opacity: _logoFade,
                             child: Container(
-                              width: 160,
-                              height: 160,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 30,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                              ),
-                              child: ClipOval(
-                                child: Image.asset(
-                                  'assets/images/DLSU-D GO!.png',
-                                  fit: BoxFit.cover,
-                                ),
+                              width: 170, // Slightly larger to compensate for padding removal
+                              height: 170,
+                              // BoxDecoration, ClipOval, and Padding removed here.
+                              // Just the raw image now.
+                              child: Image.asset(
+                                'assets/images/DLSU-D GO!.png',
+                                fit: BoxFit.contain, // Ensures nothing is cut off
                               ),
                             ),
                           ),

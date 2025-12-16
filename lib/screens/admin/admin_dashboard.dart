@@ -6,7 +6,8 @@ import '../../core/theme/app_theme.dart';
 import '../../models/dashboard_section.dart';
 import 'section_editor_screen.dart';
 import 'campus_info_editor_screen.dart';
-import '../panorama/panorama_list_screen.dart'; // Add this import
+import '../panorama/panorama_list_screen.dart';
+import 'manage_locations_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -198,6 +199,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Navigator.pop(context);
             },
           ),
+          
+          // ✅ ADDED: Map Locations in Drawer
+          ListTile(
+            leading: const Icon(Icons.map, color: Colors.redAccent),
+            title: const Text('Manage Map Locations'),
+            onTap: () {
+              Navigator.pop(context); // Close Drawer
+              Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (context) => const ManageLocationsScreen())
+              );
+            },
+          ),
+
           ListTile(
             leading: const Icon(Icons.threesixty, color: Color(0xFF1976D2)),
             title: const Text('360° Panorama'),
@@ -306,6 +321,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         () => setState(() => _selectedIndex = 1),
                   ),
                   const SizedBox(height: 12),
+                  
+                  // ✅ ADDED: Quick Action for Map Locations
+                  _buildQuickActionCard(
+                    'Manage Map Locations',
+                    'Add clinics, buildings, and update coordinates',
+                    Icons.map,
+                    Colors.redAccent,
+                    () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const ManageLocationsScreen()),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 12),
+
                   _buildQuickActionCard(
                     'Edit Campus Info',
                     'Update campus information card',

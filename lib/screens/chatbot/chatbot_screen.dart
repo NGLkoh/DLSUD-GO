@@ -963,16 +963,20 @@ User: "Can I appeal my grade?"
         Content.text(text.trim()),
       );
 
-      final botText = response.text;
+      // --- FIX APPLIED HERE ---
+      String? botText = response.text; // Make it a mutable String?
 
       if (botText == null) {
         _handleError("I'm having trouble thinking right now. Please try again, Patriot.");
         return;
       }
 
+      // Remove asterisks to prevent raw markdown display
+      botText = botText.replaceAll('*', '');
+
       setState(() {
         _messages.add(ChatMessage(
-          text: botText,
+          text: botText!, // Use the cleaned text
           isUser: false,
           timestamp: DateTime.now(),
         ));

@@ -1,5 +1,5 @@
 import 'package:dlsud_go/firebase_options.dart';
-import 'package:dlsud_go/services/settings_service.dart';
+import 'package:dlsud_go/providers/settings_provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

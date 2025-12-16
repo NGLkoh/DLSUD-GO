@@ -125,9 +125,15 @@ class CampusLocation {
     return panoramaUrls;
   }
 
-  // 3. Update the List with Categories
   static List<CampusLocation> get allLocations => [
-    // --- EAST CAMPUS ---
+
+    CampusLocation(
+      id: 'east_jfh_clinic',
+      name: 'East JFH Clinic',
+      description: 'Medical Clinic (East)',
+      section: CampusSection.east,
+      latitude: 14.3228, longitude: 120.9589, icon: Icons.medical_services,
+    ),
     CampusLocation(
       id: 'agh',
       name: 'Ayuntamiento de Gonzales Hall',
@@ -369,8 +375,13 @@ class CampusLocation {
       section: CampusSection.east,
       latitude: 14.3219, longitude: 120.9608, icon: Icons.water,
     ),
-
-    // --- WEST CAMPUS ---
+    CampusLocation(
+      id: 'west_gmh_clinic',
+      name: 'West GMH Clinic',
+      description: 'Medical Clinic (West)',
+      section: CampusSection.west,
+      latitude: 14.3210, longitude: 120.9626, icon: Icons.medical_services,
+    ),
     CampusLocation(
       id: 'bahay_pagasa',
       name: 'Bahay Pag-asa Dasmariñas',

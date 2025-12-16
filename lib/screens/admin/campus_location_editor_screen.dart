@@ -1,9 +1,3 @@
-// Updated CampusInfoEditorScreen implementing Option B
-// This version supports:
-// • Section Title
-// • Section Description
-// • List of detail items per section
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../../widgets/common/custom_button.dart';
@@ -89,40 +83,41 @@ class _CampusInfoEditorScreenState extends State<CampusInfoEditorScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Form(
-      key: _formKey,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text('Edit Campus Information Card',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 24),
+    return Scaffold( // Added Scaffold so it has a proper background/appbar if needed independently
+      appBar: AppBar(
+        title: const Text("Edit Campus Info"),
+      ),
+      body: Form(
+        key: _formKey,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            _buildTextField(_titleController, 'Title *'),
+            const SizedBox(height: 16),
+            _buildTextField(_subtitleController, 'Subtitle *'),
+            const SizedBox(height: 16),
+            _buildTextField(_descriptionController, 'Description', maxLines: 4),
+            const SizedBox(height: 16),
+            _buildTextField(_buttonTextController, 'Button Text'),
 
-          _buildTextField(_titleController, 'Title *'),
-          const SizedBox(height: 16),
-          _buildTextField(_subtitleController, 'Subtitle *'),
-          const SizedBox(height: 16),
-          _buildTextField(_descriptionController, 'Description', maxLines: 4),
-          const SizedBox(height: 16),
-          _buildTextField(_buttonTextController, 'Button Text'),
+            const SizedBox(height: 24),
+            _buildSectionsEditor(),
 
-          const SizedBox(height: 24),
-          _buildSectionsEditor(),
+            const SizedBox(height: 24),
+            SwitchListTile(
+              title: const Text('Active'),
+              value: _isActive,
+              onChanged: (v) => setState(() => _isActive = v),
+            ),
 
-          const SizedBox(height: 24),
-          SwitchListTile(
-            title: const Text('Active'),
-            value: _isActive,
-            onChanged: (v) => setState(() => _isActive = v),
-          ),
+            const SizedBox(height: 24),
 
-          const SizedBox(height: 24),
-
-          CustomButton(
-            text: _isSaving ? 'Saving...' : 'Save Changes',
-            onPressed: _isSaving ? null : _saveCampusInfo,
-          ),
-        ],
+            CustomButton(
+              text: _isSaving ? 'Saving...' : 'Save Changes',
+              onPressed: _isSaving ? null : _saveCampusInfo,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -131,7 +126,7 @@ class _CampusInfoEditorScreenState extends State<CampusInfoEditorScreen> {
     return TextFormField(
       controller: c,
       maxLines: maxLines,
-      decoration: InputDecoration(labelText: label, border: OutlineInputBorder()),
+      decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
       validator: (value) => (label.contains('*') && (value == null || value.isEmpty))
           ? 'This field is required'
           : null,
@@ -267,12 +262,18 @@ class _CampusInfoEditorScreenState extends State<CampusInfoEditorScreen> {
         'updated_at': FieldValue.serverTimestamp(),
       });
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Campus info updated.')));
+      if(mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Campus info updated.')));
+      }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     } finally {
-      setState(() => _isSaving = false);
+      if(mounted) {
+        setState(() => _isSaving = false);
+      }
     }
   }
 }
